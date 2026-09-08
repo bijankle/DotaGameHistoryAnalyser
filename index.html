@@ -292,7 +292,17 @@ var COMBAT_METRICS = [
 
 /* ---------------- small helpers ---------------- */
 
-function num(v){ return typeof v === "number" && isFinite(v) ? v : null; }
+function num(v){
+  if (typeof v === "number" && isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() !== "" && isFinite(Number(v))) return Number(v);
+  return null;
+}
+function bool(v){
+  if (typeof v === "boolean") return v;
+  if (v === 1 || v === "1" || v === "true" || v === "True") return true;
+  if (v === 0 || v === "0" || v === "false" || v === "False") return false;
+  return null;
+}
 function pct(x, dp){ return (x*100).toFixed(dp === undefined ? 1 : dp) + "%"; }
 function sig(x, dp){ var d = dp === undefined ? 2 : dp; return (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(d); }
 function fmt(x, dp){ return x === null || x === undefined || !isFinite(x) ? "—" : x.toFixed(dp); }
@@ -393,7 +403,14 @@ function matchesUrl(accountId, cap, days) {
   var q = new URLSearchParams();
   q.set("limit", String(cap));
   if (days) q.set("date", String(days));
-  ["gold_per_min","xp_per_min","hero_damage","tower_damage","last_hits","denies","level","lane_role"]
+  // Ask for every field explicitly. The brief held that project extends the
+  // default projection, but a response carrying only the projected fields and
+  // none of the scoring ones says it replaces it. Naming them all is correct
+  // under either behaviour: harmless duplication if it extends, essential if
+  // it replaces.
+  ["match_id","player_slot","radiant_win","duration","start_time",
+   "hero_id","kills","deaths","assists","party_size","lobby_type","game_mode",
+   "gold_per_min","xp_per_min","hero_damage","tower_damage","last_hits","denies","level","lane_role"]
     .forEach(function (f) { q.append("project", f); });
   return API + "/players/" + accountId + "/matches?" + q.toString();
 }
@@ -432,15 +449,27 @@ function shape(rows, heroes, opts) {
 
   var cutoff = opts.days ? (Date.now()/1000 - opts.days*86400) : null;
   var dropped = { short:0, window:0, turbo:0, unranked:0, malformed:0 };
+  var missing = { player_slot:0, radiant_win:0, duration:0, start_time:0 };
+  var keys = {};
   var out = [];
 
   rows.forEach(function (r) {
     if (!r || typeof r !== "object") { dropped.malformed++; return; }
+    Object.keys(r).forEach(function (k) { keys[k] = (keys[k] || 0) + 1; });
 
     var slot = num(r.player_slot);
+    var rw   = bool(r.radiant_win);
     var dur  = num(r.duration);
     var st   = num(r.start_time);
-    if (slot === null || typeof r.radiant_win !== "boolean" || dur === null || st === null) { dropped.malformed++; return; }
+
+    if (slot === null || rw === null || dur === null || st === null) {
+      if (slot === null) missing.player_slot++;
+      if (rw   === null) missing.radiant_win++;
+      if (dur  === null) missing.duration++;
+      if (st   === null) missing.start_time++;
+      dropped.malformed++;
+      return;
+    }
 
     if (dur < MIN_DURATION) { dropped.short++; return; }
     if (cutoff !== null && st < cutoff) { dropped.window++; return; }
@@ -452,13 +481,14 @@ function shape(rows, heroes, opts) {
     if (opts.rankedOnly && lobby !== 7) { dropped.unranked++; return; }
 
     var radiant = slot < 128;
+    var won = radiant === rw;
     var mins = dur / 60;
     var d = new Date(st * 1000);
 
     out.push({
       match_id: r.match_id != null ? r.match_id : null,
       start: st, date: d, duration: dur, minutes: mins,
-      radiant: radiant, win: radiant === r.radiant_win,
+      radiant: radiant, win: won,
       hero_id: num(r.hero_id),
       hero: heroes[r.hero_id] || (r.hero_id != null ? "Hero " + r.hero_id : "Unknown hero"),
       kills: num(r.kills), deaths: num(r.deaths), assists: num(r.assists),
@@ -489,7 +519,21 @@ function shape(rows, heroes, opts) {
     else m.prevBucket = "After a loss";
   });
 
-  return { list: out, dropped: dropped, sessions: sess };
+  return { list: out, dropped: dropped, sessions: sess, missing: missing, keys: keys };
+}
+
+function fieldReport(missing) {
+  var parts = [];
+  ["player_slot","radiant_win","duration","start_time"].forEach(function (k) {
+    if (missing[k] > 0) parts.push(k + " on " + missing[k] + " rows");
+  });
+  return parts.length ? parts.join(", ") : "none, so the rows failed for another reason";
+}
+
+function keyReport(keys, total) {
+  var names = Object.keys(keys).sort();
+  if (!names.length) return "none, the rows carried no fields at all";
+  return names.map(function (k) { return k + " (" + keys[k] + "/" + total + ")"; }).join(", ");
 }
 
 /* ---------------- statistics ---------------- */
@@ -1038,9 +1082,12 @@ function App() {
         "Only " + list.length + " match" + (list.length === 1 ? "" : "es") + " survived the filters, out of " + returned +
         " returned. That is below the " + MIN_SAMPLE + " match minimum, so the report is refused rather than produced. " +
         "With a sample that small the standard error on any win rate is wider than any effect worth reading, and every number the tool printed would be an invitation to fool yourself. " +
-        "Widen the time window, raise the match cap, or relax the Turbo and ranked filters. " +
         "Dropped: " + shaped.dropped.short + " under five minutes, " + shaped.dropped.window + " outside the window, " +
-        shaped.dropped.turbo + " Turbo, " + shaped.dropped.unranked + " not ranked, " + shaped.dropped.malformed + " missing required fields.");
+        shaped.dropped.turbo + " Turbo, " + shaped.dropped.unranked + " not ranked, " + shaped.dropped.malformed + " missing required fields." +
+        (shaped.dropped.malformed > 0
+          ? " Of the four fields a match cannot be scored without, these were the ones absent: " + fieldReport(shaped.missing) +
+            ". Every key the response actually carried, with how many rows carried it: " + keyReport(shaped.keys, returned) + "."
+          : " Widen the time window, raise the match cap, or relax the Turbo and ranked filters."));
     }
 
     var wins = list.reduce(function (a, m) { return a + (m.win ? 1 : 0); }, 0);
