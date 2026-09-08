@@ -58,10 +58,30 @@ against the next hundred games, not a conclusion.
 
 ## Analyses
 
-Hero win rates, match length bands, time of day in three hour bands on local time,
-day of week, position within a play session, previous game result as a tilt check,
-Radiant against Dire, solo against stack size, lane role, game mode combined with
-lobby type, form by calendar month, an economy block and a combat block.
+Win rate splits, each measured against your own overall win rate as the datum:
+hero, match length bands, time of day in three hour bands on local time, day of
+week, position within a play session, previous game result as a tilt check,
+Radiant against Dire, solo against stack size, lane role (off by default, since
+it needs parsed matches) and form by calendar month.
+
+Contribution rankings, each a mean per hero measured against your own overall
+figure: hero damage per minute, weighted KDA being kills plus three tenths of
+assists over deaths, and stun seconds applied per match.
+
+The two families are headlined separately. Contribution metrics separate far
+harder than win rate splits because they are partly structural, a mid laner out
+damages a hard support by construction, so a single merged ranking by sigma
+would contain nothing but hero damage rows and would bury every behavioural
+finding.
+
+Comparing your statistics in winning games against losing games is deliberately
+absent. Winning hands you towers, gold and a lower death count by construction,
+so those comparisons separate at eight to ten sigma and report only that wins
+looked like wins.
+
+A bucket holding a single match is left out of every table. A row reading 0% or
+100% next to an n of one is noise wearing a number. The counts are still in the
+exported workbook, and every block header states how many were hidden.
 
 ## Data handling
 
