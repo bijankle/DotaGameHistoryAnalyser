@@ -75,6 +75,13 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 input[type=checkbox]{accent-color:var(--blue);width:15px;height:15px;margin:0;flex:none}
 
 .divider{border:0;border-top:1px solid var(--rule-soft);margin:18px 0}
+textarea{font:inherit;font-family:"IBM Plex Mono", ui-monospace, monospace;font-size:11.5px;line-height:1.45;color:var(--ink);background:var(--panel-2);border:1px solid var(--rule);padding:8px 9px;width:100%;min-height:92px;resize:vertical;border-radius:0;display:block}
+textarea::placeholder{color:var(--ink-3)}
+.step{margin-bottom:16px}
+.step:last-child{margin-bottom:0}
+.step .n{font-size:12px;font-weight:600;color:var(--ink-2);margin:0 0 5px}
+.urlbox{font-family:"IBM Plex Mono", ui-monospace, monospace;font-size:11.5px;background:var(--blue-wash);border:1px solid var(--rule);padding:7px 9px;overflow-wrap:anywhere;margin-bottom:7px;line-height:1.45}
+.urlbox a{color:var(--blue-ink)}
 .subhead{font-size:12px;font-weight:600;color:var(--ink-2);margin:0 0 10px}
 
 .checkgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:7px 18px}
@@ -95,7 +102,7 @@ button.link{background:none;border:none;color:var(--blue);padding:0;text-decorat
 .msg{border:1px solid var(--rule);border-left:3px solid var(--ink-3);background:var(--panel-2);padding:12px 14px;margin-bottom:18px;font-size:13px;max-width:82ch}
 .msg.err{border-left-color:var(--red)}
 .msg.warn{border-left-color:#B07A28}
-.msg strong{display:block;margin-bottom:3px;font-weight:600}
+.msg b,.msg strong{display:block;margin-bottom:3px;font-weight:600}
 .msg p{margin:0 0 7px}
 .msg p:last-child{margin-bottom:0}
 .msg code{font-family:"IBM Plex Mono",monospace;font-size:12px;background:var(--blue-wash);padding:1px 4px}
@@ -341,27 +348,31 @@ function getJSON(url) {
     return res.json();
   }, function () {
     throw new ApiError("network",
-      "Could not reach OpenDota at all. That is normally a dropped connection, an offline machine, or a browser extension blocking the request.");
+      "The request to OpenDota did not complete. If you are reading this as a published page, that is expected and permanent: the viewer blocks a page from making its own outbound requests, so the automatic fetch can never work here. Use the paste path opened below instead, which needs no network access from this page at all. If you are running the file locally, then this is an ordinary dropped connection, an offline machine, or an extension blocking the request.");
   });
 }
 
 function fetchHeroes() {
-  return getJSON(API + "/heroes").then(function (rows) {
-    var map = {};
-    if (Array.isArray(rows)) rows.forEach(function (h) {
-      if (h && h.id != null) map[h.id] = h.localized_name || h.name || ("Hero " + h.id);
-    });
-    return map;
-  }, function () { return {}; });   // hero names are cosmetic; never fail the run over them
+  return getJSON(heroesUrl()).then(heroMap,
+    function () { return {}; });   // hero names are cosmetic; never fail the run over them
 }
 
-function fetchMatches(accountId, cap, days) {
+function matchesUrl(accountId, cap, days) {
   var q = new URLSearchParams();
   q.set("limit", String(cap));
   if (days) q.set("date", String(days));
   ["gold_per_min","xp_per_min","hero_damage","tower_damage","last_hits","denies","level","lane_role"]
     .forEach(function (f) { q.append("project", f); });
-  return getJSON(API + "/players/" + accountId + "/matches?" + q.toString());
+  return API + "/players/" + accountId + "/matches?" + q.toString();
+}
+function heroesUrl() { return API + "/heroes"; }
+function fetchMatches(accountId, cap, days) { return getJSON(matchesUrl(accountId, cap, days)); }
+function heroMap(rows) {
+  var map = {};
+  if (Array.isArray(rows)) rows.forEach(function (h) {
+    if (h && h.id != null) map[h.id] = h.localized_name || h.name || ("Hero " + h.id);
+  });
+  return map;
 }
 
 /* ---------------- shaping ---------------- */
@@ -617,7 +628,7 @@ function buildWorkbook(R) {
     ["Matches after filters", R.n],
     ["Wins", R.wins], ["Losses", R.n - R.wins],
     ["Baseline win rate", R.baseline],
-    ["Sample period", R.periodFrom + " to " + R.periodTo],
+    ["Period covered", R.periodFrom + " to " + R.periodTo],
     ["Play sessions", R.sessions], [],
     ["Dropped, under 5 minutes", R.dropped.short],
     ["Dropped, outside window", R.dropped.window],
@@ -862,7 +873,7 @@ function Readout(props) {
     cell("WINS", String(R.wins)),
     cell("LOSSES", String(R.n - R.wins)),
     cell("BASELINE WIN RATE", pct(R.baseline, 2)),
-    cell("SAMPLE PERIOD", R.periodFrom + "  to  " + R.periodTo, true)
+    cell("PERIOD COVERED", R.periodFrom + "  to  " + R.periodTo, true)
   );
 }
 
@@ -921,6 +932,10 @@ function App() {
     return function () { live = false; };
   }, []);
 
+  var sm = React.useState(false), manual = sm[0], setManual = sm[1];
+  var sh = React.useState(""), heroesText = sh[0], setHeroesText = sh[1];
+  var st2 = React.useState(""), matchesText = st2[0], setMatchesText = st2[1];
+
   var heroCache = React.useRef(null);
   var anyPicked = ANALYSES.some(function (a) { return picked[a.id]; });
 
@@ -931,65 +946,118 @@ function App() {
     setPicked(function () { var o = {}; ANALYSES.forEach(function (a) { o[a.id] = v; }); return o; });
   }
 
-  function run() {
+  function currentWindow() { return WINDOWS.filter(function (w) { return w.id === win; })[0] || WINDOWS[1]; }
+
+  function fail(err) {
+    setR(null); setPhase("idle");
+    if (err && err.kind === "network") setManual(true);   // paste path is the answer on a hosted page
+    setProblem({
+      kind: err && err.kind === "empty" ? "privacy" : "api",
+      title: err && err.kind === "empty" ? "No public matches on that account"
+           : err && err.kind === "thin" ? "Sample too small to analyse"
+           : err && err.kind === "notfound" ? "Account not found"
+           : err && err.kind === "rate" ? "Rate limited by OpenDota"
+           : err && err.kind === "network" ? "This page cannot call OpenDota itself"
+           : "Could not complete the request",
+      body: [err && err.message ? err.message : "An unexpected error stopped the run."]
+    });
+  }
+
+  // Shared by the automatic fetch and the pasted-data path. Throws ApiError.
+  function finish(rows, heroes, accId, how, windowDef, source) {
+    var returned = Array.isArray(rows) ? rows.length : 0;
+
+    if (returned === 0) {
+      throw new ApiError("empty",
+        "OpenDota returned an empty list for account " + accId + ". Almost always this means Expose Public Match Data is switched off in your Dota 2 privacy settings. Open Dota 2, go to Settings, then Options, then Advanced Options, and turn on Expose Public Match Data. Matches played before you turned it on stay hidden, so play one game and give OpenDota a few minutes to pick it up. The other possibility is that the account ID is valid but belongs to somebody who has never played.");
+    }
+
+    var shaped = shape(rows, heroes, { days: windowDef.days, noTurbo: noTurbo, rankedOnly: rankedOnly });
+    var list = shaped.list;
+
+    if (list.length < MIN_SAMPLE) {
+      throw new ApiError("thin",
+        "Only " + list.length + " match" + (list.length === 1 ? "" : "es") + " survived the filters, out of " + returned +
+        " returned. That is below the " + MIN_SAMPLE + " match minimum, so the report is refused rather than produced. " +
+        "With a sample that small the standard error on any win rate is wider than any effect worth reading, and every number the tool printed would be an invitation to fool yourself. " +
+        "Widen the time window, raise the match cap, or relax the Turbo and ranked filters. " +
+        "Dropped: " + shaped.dropped.short + " under five minutes, " + shaped.dropped.window + " outside the window, " +
+        shaped.dropped.turbo + " Turbo, " + shaped.dropped.unranked + " not ranked, " + shaped.dropped.malformed + " missing required fields.");
+    }
+
+    var wins = list.reduce(function (a, m) { return a + (m.win ? 1 : 0); }, 0);
+    var baseline = wins / list.length;
+
+    setR({
+      accountId: accId, how: how, source: source,
+      windowLabel: windowDef.label, cap: cap, noTurbo: noTurbo, rankedOnly: rankedOnly,
+      returned: returned, dropped: shaped.dropped, sessions: shaped.sessions,
+      list: list, n: list.length, wins: wins, baseline: baseline,
+      periodFrom: dstr(list[0].date), periodTo: dstr(list[list.length - 1].date),
+      blocks: buildBlocks(list, baseline, picked)
+    });
+    setPhase("done");
+    setProblem(null);
+  }
+
+  function preflight() {
     var parsed = parseAccountId(idText);
-    if (parsed.error) { setProblem({ kind: "input", title: "Check the account ID", body: [parsed.error] }); setPhase("idle"); setR(null); return; }
-    if (!anyPicked) { setProblem({ kind: "input", title: "Nothing selected", body: ["Tick at least one analysis before generating."] }); setPhase("idle"); return; }
+    if (parsed.error) { setProblem({ kind: "input", title: "Check the account ID", body: [parsed.error] }); setPhase("idle"); setR(null); return null; }
+    if (!anyPicked) { setProblem({ kind: "input", title: "Nothing selected", body: ["Tick at least one analysis before generating."] }); setPhase("idle"); return null; }
+    return parsed;
+  }
+
+  function run() {
+    var parsed = preflight();
+    if (!parsed) return;
 
     setPhase("loading"); setProblem(null); setSaveNote(null);
-
-    var windowDef = WINDOWS.filter(function (w) { return w.id === win; })[0] || WINDOWS[1];
+    var windowDef = currentWindow();
     var heroP = heroCache.current ? Promise.resolve(heroCache.current) : fetchHeroes();
 
     heroP.then(function (heroes) {
       heroCache.current = heroes;
       return fetchMatches(parsed.id, cap, windowDef.days).then(function (rows) {
-        var returned = Array.isArray(rows) ? rows.length : 0;
-
-        if (returned === 0) {
-          throw new ApiError("empty",
-            "OpenDota returned an empty list for account " + parsed.id + ". Almost always this means Expose Public Match Data is switched off in your Dota 2 privacy settings. Open Dota 2, go to Settings, then Options, then Advanced Options, and turn on Expose Public Match Data. Matches played before you turned it on stay hidden, so play one game and give OpenDota a few minutes to pick it up. The other possibility is that the account ID is valid but belongs to somebody who has never played.");
-        }
-
-        var shaped = shape(rows, heroes, { days: windowDef.days, noTurbo: noTurbo, rankedOnly: rankedOnly });
-        var list = shaped.list;
-
-        if (list.length < MIN_SAMPLE) {
-          throw new ApiError("thin",
-            "Only " + list.length + " match" + (list.length === 1 ? "" : "es") + " survived the filters, out of " + returned +
-            " returned. That is below the " + MIN_SAMPLE + " match minimum, so the report is refused rather than produced. " +
-            "With a sample that small the standard error on any win rate is wider than any effect worth reading, and every number the tool printed would be an invitation to fool yourself. " +
-            "Widen the time window, raise the match cap, or relax the Turbo and ranked filters. " +
-            "Dropped: " + shaped.dropped.short + " under five minutes, " + shaped.dropped.window + " outside the window, " +
-            shaped.dropped.turbo + " Turbo, " + shaped.dropped.unranked + " not ranked, " + shaped.dropped.malformed + " missing required fields.");
-        }
-
-        var wins = list.reduce(function (a, m) { return a + (m.win ? 1 : 0); }, 0);
-        var baseline = wins / list.length;
-        var blocks = buildBlocks(list, baseline, picked);
-
-        setR({
-          accountId: parsed.id, how: parsed.how,
-          windowLabel: windowDef.label, cap: cap, noTurbo: noTurbo, rankedOnly: rankedOnly,
-          returned: returned, dropped: shaped.dropped, sessions: shaped.sessions,
-          list: list, n: list.length, wins: wins, baseline: baseline,
-          periodFrom: dstr(list[0].date), periodTo: dstr(list[list.length - 1].date),
-          blocks: blocks
-        });
-        setPhase("done");
+        finish(rows, heroes, parsed.id, parsed.how, windowDef, "fetched live from OpenDota");
       });
-    }).catch(function (err) {
-      setR(null); setPhase("idle");
-      setProblem({
-        kind: err && err.kind === "empty" ? "privacy" : "api",
-        title: err && err.kind === "empty" ? "No public matches on that account"
-             : err && err.kind === "thin" ? "Sample too small to analyse"
-             : err && err.kind === "notfound" ? "Account not found"
-             : err && err.kind === "rate" ? "Rate limited by OpenDota"
-             : "Could not complete the request",
-        body: [err && err.message ? err.message : "An unexpected error stopped the run."]
-      });
-    });
+    }).catch(fail);
+  }
+
+  function runPasted() {
+    var parsed = preflight();
+    if (!parsed) return;
+
+    var heroes = {};
+    var ht = heroesText.trim();
+    if (ht) {
+      try {
+        var hr = JSON.parse(ht);
+        if (!Array.isArray(hr)) throw new Error("not an array");
+        heroes = heroMap(hr);
+      } catch (err) {
+        setProblem({ kind: "input", title: "Hero list did not parse",
+          body: ["The hero list box does not contain the JSON array from " + heroesUrl() + ". Copy the whole response, opening square bracket to closing square bracket. Or clear the box entirely, in which case heroes are labelled by ID instead of by name."] });
+        return;
+      }
+    }
+
+    var rows;
+    try {
+      rows = JSON.parse(matchesText);
+    } catch (err) {
+      setProblem({ kind: "input", title: "Match data did not parse",
+        body: ["The match data box does not contain valid JSON. Copy the entire OpenDota response, from the opening square bracket to the closing one, with nothing before or after it."] });
+      return;
+    }
+    if (!Array.isArray(rows)) {
+      setProblem({ kind: "input", title: "Match data is not a list",
+        body: ["That JSON parsed, but it is not an array of matches. Check you copied the response from the matches URL and not something else. If OpenDota returned an object containing an error message, the account ID is probably wrong."] });
+      return;
+    }
+
+    setSaveNote(null);
+    try { finish(rows, heroes, parsed.id, parsed.how, currentWindow(), "pasted from OpenDota by hand"); }
+    catch (err) { fail(err); }
   }
 
   function onKey(ev) { if (ev.key === "Enter") run(); }
@@ -1053,6 +1121,8 @@ function App() {
     div({ className: "toolbar" },
       button({ type: "button", onClick: run, disabled: phase === "loading" },
         phase === "loading" ? "Reading match history…" : "Generate report"),
+      button({ className: "ghost", type: "button", onClick: function () { setManual(!manual); } },
+        manual ? "Hide the paste path" : "Paste data instead"),
       R && saveMode !== "none"
         ? button({ className: "ghost", type: "button", disabled: saveMode === "pending",
             onClick: function () { setSaveNote(null); exportWorkbook(R, saveMode, dlRef.current, setSaveNote); } },
@@ -1066,12 +1136,48 @@ function App() {
     )
   );
 
+  /* --- paste path, for viewers that block the page's own requests --- */
+  var pid = parseAccountId(idText);
+  var mUrl = pid.error ? null : matchesUrl(pid.id, cap, currentWindow().days);
+
+  function urlStep(n, heading, url, note, value, onChange, placeholder) {
+    return div({ className: "step" },
+      p_({ className: "n" }, n + ". " + heading),
+      div({ className: "urlbox" },
+        url ? React.createElement("a", { href: url, target: "_blank", rel: "noopener noreferrer" }, url)
+            : "Enter a valid account ID above and this URL will appear here."),
+      p_({ className: "hint", style: { margin: "0 0 7px" } }, note),
+      React.createElement("textarea", {
+        value: value, onChange: function (ev) { onChange(ev.target.value); },
+        placeholder: placeholder, spellCheck: false, "aria-label": heading
+      })
+    );
+  }
+
+  var pastePanel = manual ? div({ className: "panel" },
+    h2_(null, "Load data by hand"),
+    p_({ className: "hint" },
+      "A published page is not allowed to make its own outbound requests, so the automatic fetch cannot work when this is opened as a hosted link. Nothing is wrong with your ID or your privacy settings. Fetch the two responses yourself and paste them in, and every calculation runs exactly as it would have. The repository copy, opened as a local file, fetches automatically and needs none of this."),
+    hr({ className: "divider" }),
+    urlStep(1, "Hero names, optional but recommended", heroesUrl(),
+      "Open the link, select everything, copy, paste below. Leave this empty and heroes are labelled by numeric ID instead of by name. The list rarely changes, so one copy lasts you months.",
+      heroesText, setHeroesText, "[{\"id\":1,\"name\":\"npc_dota_hero_antimage\",\"localized_name\":\"Anti-Mage\", ... }]"),
+    urlStep(2, "Your match history, required", mUrl,
+      "This URL already carries your time window, match cap and the extra fields the report needs. Open it, select everything, copy, paste below. On a large window the response is long; copy all of it.",
+      matchesText, setMatchesText, "[{\"match_id\":8123456789,\"player_slot\":2,\"radiant_win\":true, ... }]"),
+    div({ className: "toolbar" },
+      button({ type: "button", onClick: runPasted, disabled: !matchesText.trim() }, "Run from pasted data"),
+      button({ className: "ghost", type: "button", onClick: function () { setMatchesText(""); setHeroesText(""); } }, "Clear boxes")
+    )
+  ) : null;
+
   /* --- method panel, shown before a run --- */
   var method = div({ className: "panel method" },
     h2_(null, "How this measures"),
-    p_({ className: "hint" }, "The instrument treats your overall win rate on the filtered sample as the datum, and asks whether any split sits far enough off that line to be distinguishable from sampling noise."),
+    p_({ className: "hint" }, "The instrument treats your overall win rate across all the matches that passed your filters as the datum, then asks whether any split sits far enough off that line to be distinguishable from noise."),
     dl(null,
-      dt(null, "Datum"), dd(null, "Your own win rate across the filtered sample. Not 50%, and not anybody else's."),
+      dt(null, "Datum"), dd(null, "Your own win rate across every match that passed the filters. Not 50%, and not anybody else's."),
+      dt(null, "Coverage"), dd(null, "Every match OpenDota returns inside your window is used. Nothing is sampled, subsampled, averaged away or thrown out, other than the exclusions listed on this page, and the run record at the foot of every report states exactly how many matches were dropped and why."),
       dt(null, "Categorical splits"), dd(null, "Standard error on the proportion, the square root of p times one minus p divided by the bucket size, with p the datum. The reported sigma is how many of those standard errors the bucket sits from the line."),
       dt(null, "Suppression"), dd(null, "Below " + SIGMA_CAT + " sigma, or below " + MIN_BUCKET + " games, no finding is written. The bucket still appears in the table, muted, so you can see it was measured."),
       dt(null, "Wins against losses"), dd(null, "Welch's comparison, two populations with different variances and different sizes. A finding needs " + SIGMA_WELCH + " sigma."),
@@ -1080,8 +1186,8 @@ function App() {
       dt(null, "Missing fields"), dd(null, "OpenDota only fills lane role and some detail on parsed matches, which is a minority. Nothing is inferred to fill a gap. Unmeasured is reported as unmeasured.")
     ),
     p_({ className: "hint", style: { marginTop: "14px", marginBottom: 0 } },
-      "One honest limit worth stating up front. Every split below is an observed correlation on a sample you did not randomise. A bucket clearing " + SIGMA_CAT +
-      " sigma has cleared a low bar, and running thirteen analyses at once means some buckets will clear it by chance alone. Treat a finding as a hypothesis to test against the next hundred games, not a conclusion.")
+      "One honest limit worth stating up front, and it is not about how much data is used, because all of it is. It is that these matches were never assigned to conditions the way a controlled experiment assigns them. You chose when to play, which hero to pick and when to stop, so a bucket can move for reasons the bucket itself does not name. A split clearing " + SIGMA_CAT +
+      " sigma has cleared a low bar, and running thirteen analyses over the same matches means roughly one bucket in fifteen clears it by chance alone. Treat a finding as a hypothesis to test against your next hundred games, not a conclusion.")
   );
 
   /* --- problem messages --- */
@@ -1093,7 +1199,7 @@ function App() {
   return div(null,
     div({ className: "masthead" },
       React.createElement("h1", null, "Dota deviation report"),
-      p_({ className: "sub" }, "An instrument, not a coach. It reads your public OpenDota match history, takes your own win rate as the datum, and reports which conditions sit far enough off that line to be worth believing."),
+      p_({ className: "sub" }, "An instrument, not a coach. It reads every match in your public OpenDota history inside the window you set, takes your own win rate as the datum, and reports which conditions sit far enough off that line to be worth believing."),
       div({ className: "stamp" },
         span(null, "Source: OpenDota public API"),
         span(null, "Datum: player baseline"),
@@ -1104,6 +1210,7 @@ function App() {
     ),
     msg,
     controls,
+    pastePanel,
     R ? div({ className: "reveal", key: R.accountId + "-" + R.n },
           e(Readout, { R: R }),
           e(Headline, { blocks: R.blocks, baseline: R.baseline, n: R.n }),
@@ -1115,7 +1222,7 @@ function App() {
           div({ className: "panel", style: { marginTop: "18px" } },
             h2_(null, "Run record"),
             p_({ className: "hint", style: { marginBottom: 0 } },
-              "Account " + R.accountId + ", " + R.how + ". Requested " + R.windowLabel.toLowerCase() + " capped at " + R.cap +
+              "Account " + R.accountId + ", " + R.how + ", " + R.source + ". Requested " + R.windowLabel.toLowerCase() + " capped at " + R.cap +
               " matches; OpenDota returned " + R.returned + " and " + R.n + " survived the filters, spanning " + R.sessions + " play sessions. " +
               "Discarded: " + R.dropped.short + " under five minutes, " + R.dropped.window + " outside the window, " +
               R.dropped.turbo + " Turbo, " + R.dropped.unranked + " not ranked, " + R.dropped.malformed + " missing required fields.")
