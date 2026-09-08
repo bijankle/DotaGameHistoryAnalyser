@@ -1,0 +1,1130 @@
+<title>Dota Deviation Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#EEF1F0;
+  --panel:#F8FAF9;
+  --panel-2:#FFFFFF;
+  --ink:#1E2A2F;
+  --ink-2:#54666E;
+  --ink-3:#8A9AA0;
+  --rule:#C9D4D2;
+  --rule-soft:#DDE4E2;
+  --blue:#1F5F8B;
+  --blue-ink:#164866;
+  --blue-wash:#E2EBF1;
+  --green:#4A7C59;
+  --red:#9B4A3C;
+  --grid:rgba(30,42,47,.055);
+  --grid-major:rgba(30,42,47,.085);
+  --shadow:0 1px 0 rgba(30,42,47,.06);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background-color:var(--ground);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px),
+    linear-gradient(var(--grid-major) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-major) 1px, transparent 1px);
+  background-size:8px 8px, 8px 8px, 48px 48px, 48px 48px;
+  color:var(--ink);
+  font-family:"IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size:14px;
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1120px;margin:0 auto;padding:28px 20px 96px}
+.mono{font-family:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
+.num{font-variant-numeric:tabular-nums;font-family:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
+
+/* ---------- masthead ---------- */
+.masthead{border-bottom:2px solid var(--ink);padding-bottom:14px;margin-bottom:22px}
+.masthead h1{
+  font-size:26px;font-weight:600;margin:0 0 4px;letter-spacing:-.012em;
+  text-wrap:balance;
+}
+.masthead .sub{color:var(--ink-2);max-width:66ch;margin:0}
+.stamp{
+  display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:10px;
+  font-size:11.5px;color:var(--ink-3);
+}
+.stamp span{font-variant-numeric:tabular-nums}
+
+/* ---------- panels ---------- */
+.panel{background:var(--panel);border:1px solid var(--rule);box-shadow:var(--shadow);padding:18px 20px;margin-bottom:18px}
+.panel > h2{font-size:15px;font-weight:600;margin:0 0 2px}
+.panel > .hint{color:var(--ink-2);font-size:12.5px;margin:0 0 16px;max-width:74ch}
+
+.fieldgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px 18px;align-items:start}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.field > label{font-size:12px;font-weight:500;color:var(--ink-2)}
+.field .note{font-size:11px;color:var(--ink-3);line-height:1.4}
+input[type=text],select{
+  font:inherit;font-size:13.5px;font-variant-numeric:tabular-nums;
+  color:var(--ink);background:var(--panel-2);
+  border:1px solid var(--rule);padding:7px 9px;width:100%;min-width:0;border-radius:0;
+}
+input[type=text]{font-family:"IBM Plex Mono", ui-monospace, monospace}
+input[type=text]::placeholder{color:var(--ink-3);font-family:"IBM Plex Sans",sans-serif}
+select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--ink-2) 50%),linear-gradient(135deg,var(--ink-2) 50%,transparent 50%);background-position:calc(100% - 15px) 14px,calc(100% - 10px) 14px;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:30px}
+:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+input[type=checkbox]{accent-color:var(--blue);width:15px;height:15px;margin:0;flex:none}
+
+.divider{border:0;border-top:1px solid var(--rule-soft);margin:18px 0}
+.subhead{font-size:12px;font-weight:600;color:var(--ink-2);margin:0 0 10px}
+
+.checkgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:7px 18px}
+.check{display:flex;gap:8px;align-items:flex-start;cursor:pointer;padding:2px 0;min-width:0}
+.check span{font-size:13px;line-height:1.35}
+.check.inline{align-items:center}
+
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:18px}
+button{font:inherit;border-radius:0;cursor:pointer;border:1px solid var(--blue);background:var(--blue);color:#fff;padding:9px 20px;font-size:13.5px;font-weight:500}
+button:hover:not(:disabled){background:var(--blue-ink);border-color:var(--blue-ink)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.ghost{background:transparent;color:var(--blue);border-color:var(--rule)}
+button.ghost:hover:not(:disabled){background:var(--blue-wash);border-color:var(--blue);color:var(--blue-ink)}
+button.link{background:none;border:none;color:var(--blue);padding:0;text-decoration:underline;font-size:12px;text-underline-offset:2px}
+.toolbar .status{font-size:12.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+
+/* ---------- messages ---------- */
+.msg{border:1px solid var(--rule);border-left:3px solid var(--ink-3);background:var(--panel-2);padding:12px 14px;margin-bottom:18px;font-size:13px;max-width:82ch}
+.msg.err{border-left-color:var(--red)}
+.msg.warn{border-left-color:#B07A28}
+.msg strong{display:block;margin-bottom:3px;font-weight:600}
+.msg p{margin:0 0 7px}
+.msg p:last-child{margin-bottom:0}
+.msg code{font-family:"IBM Plex Mono",monospace;font-size:12px;background:var(--blue-wash);padding:1px 4px}
+
+/* ---------- readout strip ---------- */
+.readout{background:var(--ink);color:#E7ECEA;padding:16px 20px;margin-bottom:18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:14px 26px}
+.readout .cell{min-width:0}
+.readout .k{font-size:10.5px;letter-spacing:.06em;color:#8FA3A8;margin-bottom:3px}
+.readout .v{font-size:19px;font-weight:500;font-variant-numeric:tabular-nums;font-family:"IBM Plex Mono",monospace;line-height:1.2;overflow-wrap:anywhere}
+.readout .v.small{font-size:13px;padding-top:4px}
+
+/* ---------- findings ---------- */
+.headline{background:var(--panel-2);border:1px solid var(--rule);border-top:2px solid var(--blue);padding:16px 20px;margin-bottom:18px}
+.headline h2{font-size:14px;font-weight:600;margin:0 0 10px}
+.fl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+.fl li{display:grid;grid-template-columns:58px 1fr;gap:12px;align-items:baseline;font-size:13.2px}
+.fl .sg{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;font-size:12.5px;font-weight:500;text-align:right}
+.sg.up{color:var(--green)} .sg.dn{color:var(--red)}
+.fl .src{color:var(--ink-3);font-size:11.5px}
+
+/* ---------- analysis blocks ---------- */
+.block{background:var(--panel-2);border:1px solid var(--rule);padding:16px 20px 18px;margin-bottom:16px}
+.block > header{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;justify-content:space-between;margin-bottom:2px}
+.block h3{font-size:14.5px;font-weight:600;margin:0}
+.block .meta{font-size:11.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.block .desc{font-size:12.5px;color:var(--ink-2);margin:0 0 14px;max-width:78ch}
+
+.scroller{overflow-x:auto}
+.dev{min-width:560px}
+.dev .hd,.dev .row{
+  display:grid;
+  grid-template-columns:minmax(120px,1.35fr) 46px 62px minmax(150px,2.1fr) 58px;
+  gap:12px;align-items:center;
+}
+.dev .hd{font-size:10.5px;letter-spacing:.05em;color:var(--ink-3);padding-bottom:6px;border-bottom:1px solid var(--rule)}
+.dev .hd .r,.dev .row .r{text-align:right}
+.dev .row{padding:5px 0;border-bottom:1px solid var(--rule-soft);font-size:13px}
+.dev .row:last-child{border-bottom:0}
+.dev .row .lb{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dev .row.thin .lb,.dev .row.thin .r{color:var(--ink-3)}
+
+.track{position:relative;height:17px;background:
+  linear-gradient(90deg,var(--rule-soft) 1px,transparent 1px) 0 0/25% 100%;
+  border-top:1px solid var(--rule-soft);border-bottom:1px solid var(--rule-soft)}
+.track .datum{position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--ink);opacity:.7}
+.track .bar{position:absolute;top:3px;bottom:3px}
+.track .bar.up{background:var(--green)} .track .bar.dn{background:var(--red)}
+.track .bar.thin{background:var(--ink-3)}
+
+.foot{margin-top:12px;padding-top:11px;border-top:1px solid var(--rule)}
+.foot p{margin:0 0 6px;font-size:12.8px;max-width:80ch}
+.foot p:last-child{margin-bottom:0}
+.foot p.quiet{color:var(--ink-2)}
+.foot p.caveat{color:var(--ink-2);font-size:12px;border-left:2px solid var(--rule);padding-left:9px}
+.foot b.up{color:var(--green);font-weight:500} .foot b.dn{color:var(--red);font-weight:500}
+
+/* welch table */
+.wl{min-width:600px}
+.wl .hd,.wl .row{display:grid;grid-template-columns:minmax(130px,1.3fr) 68px 68px 66px minmax(110px,1.4fr) 56px;gap:12px;align-items:center}
+.wl .hd{font-size:10.5px;letter-spacing:.05em;color:var(--ink-3);padding-bottom:6px;border-bottom:1px solid var(--rule)}
+.wl .hd .r,.wl .row .r{text-align:right}
+.wl .row{padding:5px 0;border-bottom:1px solid var(--rule-soft);font-size:13px}
+.wl .row:last-child{border-bottom:0}
+
+/* method */
+.method dl{display:grid;grid-template-columns:minmax(128px,auto) 1fr;gap:7px 18px;margin:0;font-size:12.8px}
+.method dt{font-weight:500;color:var(--ink-2)}
+.method dd{margin:0;color:var(--ink)}
+
+@keyframes rise{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.reveal{animation:rise .34s cubic-bezier(.2,.6,.3,1) both}
+@media (prefers-reduced-motion: reduce){.reveal{animation:none}*{transition:none!important}}
+
+@media (max-width:640px){
+  .wrap{padding:20px 14px 72px}
+  .masthead h1{font-size:22px}
+  .readout{padding:14px 16px}
+  .panel,.block,.headline{padding-left:15px;padding-right:15px}
+  .fl li{grid-template-columns:52px 1fr;gap:9px}
+  .method dl{grid-template-columns:1fr;gap:2px 0}
+  .method dd{margin-bottom:8px}
+}
+</style>
+
+<div class="wrap"><div id="root"></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+"use strict";
+(function () {
+/* ============================================================
+   Dota Deviation Report
+   A win-rate deviation instrument over OpenDota match history.
+   Every field read from the API is treated as optional, because
+   OpenDota only populates parsed fields (lane_role above all)
+   on the minority of matches that have been parsed.
+   ============================================================ */
+
+var e = React.createElement;
+function tag(t){ return function(p){ var k=[].slice.call(arguments,1); return e.apply(null,[t,p].concat(k)); }; }
+var div=tag("div"), span=tag("span"), p_=tag("p"), h2_=tag("h2"), h3_=tag("h3"),
+    ul=tag("ul"), li=tag("li"), b_=tag("b"), label=tag("label"), input=tag("input"),
+    select=tag("select"), option=tag("option"), button=tag("button"), header=tag("header"),
+    section=tag("section"), dl=tag("dl"), dt=tag("dt"), dd=tag("dd"), hr=tag("hr"), code=tag("code");
+
+/* ---------------- constants ---------------- */
+
+var STEAM64_BASE = 76561197960265728n;
+var API = "https://api.opendota.com/api";
+var MIN_DURATION = 300;          // 5 minutes; shorter is an abandon
+var MIN_BUCKET   = 8;            // games before a bucket may produce a finding
+var SIGMA_CAT    = 1.5;          // categorical significance floor
+var SIGMA_WELCH  = 1.8;          // wins-vs-losses separation floor
+var SESSION_GAP  = 3 * 3600;     // 3 hours of silence starts a new session
+var MIN_SAMPLE   = 10;           // refuse to analyse below this
+
+var LANE_ROLE = {1:"Safe lane",2:"Mid lane",3:"Off lane",4:"Jungle"};
+var GAME_MODE = {0:"Unknown",1:"All Pick",2:"Captains Mode",3:"Random Draft",4:"Single Draft",
+  5:"All Random",6:"Intro",7:"Diretide",8:"Reverse CM",9:"Greeviling",10:"Tutorial",11:"Mid Only",
+  12:"Least Played",13:"Limited Heroes",14:"Compendium",15:"Custom",16:"Captains Draft",
+  17:"Balanced Draft",18:"Ability Draft",19:"Event",20:"All Random Deathmatch",21:"1v1 Mid",
+  22:"All Draft",23:"Turbo",24:"Mutation"};
+var LOBBY_TYPE = {0:"Unranked",1:"Practice",2:"Tournament",3:"Tutorial",4:"Co-op bots",
+  5:"Ranked team",6:"Ranked solo",7:"Ranked",8:"1v1 mid",9:"Battle cup"};
+var WEEKDAY = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+
+var WINDOWS = [
+  {id:"1m",  label:"Last 1 month",   days:30},
+  {id:"3m",  label:"Last 3 months",  days:91},
+  {id:"6m",  label:"Last 6 months",  days:182},
+  {id:"12m", label:"Last 12 months", days:365},
+  {id:"all", label:"All history",    days:null}
+];
+var CAPS = [100,250,500,1000,1500,2000,3000,5000];
+
+var ANALYSES = [
+  {id:"hero",    name:"Hero win rates",        kind:"cat", sheet:"Heroes",
+   desc:"Win rate by hero played. Heroes under " + MIN_BUCKET + " games are shown muted and excluded from findings."},
+  {id:"length",  name:"Match length",          kind:"cat", sheet:"Match length",
+   desc:"Duration bands. Reads as a proxy for whether you close games out or get dragged long."},
+  {id:"tod",     name:"Time of day",           kind:"cat", sheet:"Time of day",
+   desc:"Three hour bands on your machine's local clock, taken from each match start time."},
+  {id:"dow",     name:"Day of week",           kind:"cat", sheet:"Day of week",
+   desc:"Local calendar day of the match start."},
+  {id:"session", name:"Position within session", kind:"cat", sheet:"Session position",
+   desc:"A gap of more than three hours between the end of one match and the start of the next opens a new session."},
+  {id:"tilt",    name:"Previous game result",  kind:"cat", sheet:"Previous result",
+   desc:"The tilt check. Previous result only counts inside the same session, so a loss you slept on is not charged against the next morning."},
+  {id:"side",    name:"Radiant against Dire",  kind:"cat", sheet:"Side",
+   desc:"Side is assigned by the matchmaker, so a real deviation here is either map preference or a very lucky sample."},
+  {id:"party",   name:"Solo against stack",    kind:"cat", sheet:"Party size",
+   desc:"Party size as reported. OpenDota leaves this null on many matches, so those sit in an explicit unknown bucket and never generate a finding."},
+  {id:"lane",    name:"Lane role",             kind:"cat", sheet:"Lane role",
+   desc:"Only present on parsed matches. Everything else is counted as unparsed rather than guessed."},
+  {id:"modes",   name:"Game mode and lobby",   kind:"cat", sheet:"Mode and lobby",
+   desc:"Mode and lobby type combined, because the pair is what actually describes the queue."},
+  {id:"month",   name:"Form by month",         kind:"cat", sheet:"Monthly form",
+   desc:"Calendar month, most recent fourteen. Watch the sample column: recent months are often too thin to read."},
+  {id:"econ",    name:"Economy in wins against losses", kind:"welch", sheet:"Economy",
+   desc:"Farm and experience separation between the two populations, by Welch's unequal variance comparison."},
+  {id:"combat",  name:"Combat in wins against losses",  kind:"welch", sheet:"Combat",
+   desc:"Fighting output separation between the two populations, by Welch's unequal variance comparison."}
+];
+
+var ECON_METRICS = [
+  {key:"gold_per_min", label:"Gold per minute",   dp:0},
+  {key:"xp_per_min",   label:"XP per minute",     dp:0},
+  {key:"last_hits",    label:"Last hits",         dp:0},
+  {key:"lh_per_min",   label:"Last hits / min",   dp:2, derived:true},
+  {key:"denies",       label:"Denies",            dp:1},
+  {key:"level",        label:"Hero level",        dp:1}
+];
+var COMBAT_METRICS = [
+  {key:"kills",         label:"Kills",              dp:2},
+  {key:"deaths",        label:"Deaths",             dp:2},
+  {key:"deaths_per_10", label:"Deaths / 10 min",    dp:2, derived:true},
+  {key:"assists",       label:"Assists",            dp:2},
+  {key:"hero_damage",   label:"Hero damage",        dp:0},
+  {key:"hd_per_min",    label:"Hero damage / min",  dp:0, derived:true},
+  {key:"tower_damage",  label:"Tower damage",       dp:0}
+];
+
+/* ---------------- small helpers ---------------- */
+
+function num(v){ return typeof v === "number" && isFinite(v) ? v : null; }
+function pct(x, dp){ return (x*100).toFixed(dp === undefined ? 1 : dp) + "%"; }
+function sig(x, dp){ var d = dp === undefined ? 2 : dp; return (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(d); }
+function fmt(x, dp){ return x === null || x === undefined || !isFinite(x) ? "—" : x.toFixed(dp); }
+function clamp(v,a,b){ return v < a ? a : v > b ? b : v; }
+function pad2(n){ return (n<10?"0":"") + n; }
+function dstr(d){ return d.getFullYear() + "-" + pad2(d.getMonth()+1) + "-" + pad2(d.getDate()); }
+
+/* ---------------- account id parsing ---------------- */
+
+function parseAccountId(raw) {
+  var s = String(raw == null ? "" : raw).trim();
+  if (!s) return { error: "Enter a Dota 2 friend ID to run the report." };
+
+  if (/steamcommunity\.com\/id\//i.test(s)) {
+    return { error: "That is a custom Steam URL, and resolving it needs a Steam Web API key on a server, which this page deliberately does not have. Open your Dota 2 profile, read the friend ID under your name, and paste that number instead." };
+  }
+
+  var m = s.match(/(?:dotabuff\.com|opendota\.com|stratz\.com)\/(?:players|matches)\/(\d+)/i);
+  if (m) return { id: Number(m[1]), how: "read from a profile URL" };
+
+  m = s.match(/steamcommunity\.com\/profiles\/(\d+)/i);
+  var digits = m ? m[1] : s.replace(/[^0-9]/g, "");
+
+  if (!digits) return { error: "No digits found in that. Paste a friend ID, a 17 digit Steam ID, or a profile URL." };
+  if (digits.length > 20) return { error: "That number is too long to be a Steam or Dota account ID." };
+
+  var big;
+  try { big = BigInt(digits); } catch (err) { return { error: "That is not a number this page can read." }; }
+
+  // 17 digits, or anything at or above the Steam64 base, is a 64 bit Steam ID.
+  if (digits.length >= 17 || big >= STEAM64_BASE) {
+    if (big < STEAM64_BASE) return { error: "That looks like a 17 digit Steam ID but it is below the individual account range." };
+    var conv = big - STEAM64_BASE;
+    if (conv <= 0n || conv > 4294967295n) return { error: "Converting that Steam ID gave an account ID outside the valid 32 bit range." };
+    return { id: Number(conv), how: "converted from a 64 bit Steam ID" };
+  }
+
+  if (big <= 0n || big > 4294967295n) return { error: "That account ID is outside the valid 32 bit range." };
+  return { id: Number(big), how: "read as a 32 bit friend ID" };
+}
+
+/* ---------------- network ---------------- */
+
+function ApiError(kind, message){ this.kind = kind; this.message = message; }
+ApiError.prototype = Object.create(Error.prototype);
+
+function getJSON(url) {
+  return fetch(url, { headers: { "Accept": "application/json" } }).then(function (res) {
+    if (res.status === 404) throw new ApiError("notfound",
+      "OpenDota returned 404 for that account ID. The ID is wrong. Check the friend ID shown on your Dota 2 profile, and note that the friend ID is not the same number as your 17 digit Steam ID.");
+    if (res.status === 429) throw new ApiError("rate",
+      "OpenDota rate limited the request (429). The free API allows a limited number of calls per minute. Wait about a minute and press Generate again.");
+    if (res.status >= 500) throw new ApiError("server",
+      "OpenDota returned a " + res.status + ". That is their server, not your ID or this page. Try again shortly.");
+    if (!res.ok) throw new ApiError("http", "OpenDota returned HTTP " + res.status + ".");
+    return res.json();
+  }, function () {
+    throw new ApiError("network",
+      "Could not reach OpenDota at all. That is normally a dropped connection, an offline machine, or a browser extension blocking the request.");
+  });
+}
+
+function fetchHeroes() {
+  return getJSON(API + "/heroes").then(function (rows) {
+    var map = {};
+    if (Array.isArray(rows)) rows.forEach(function (h) {
+      if (h && h.id != null) map[h.id] = h.localized_name || h.name || ("Hero " + h.id);
+    });
+    return map;
+  }, function () { return {}; });   // hero names are cosmetic; never fail the run over them
+}
+
+function fetchMatches(accountId, cap, days) {
+  var q = new URLSearchParams();
+  q.set("limit", String(cap));
+  if (days) q.set("date", String(days));
+  ["gold_per_min","xp_per_min","hero_damage","tower_damage","last_hits","denies","level","lane_role"]
+    .forEach(function (f) { q.append("project", f); });
+  return getJSON(API + "/players/" + accountId + "/matches?" + q.toString());
+}
+
+/* ---------------- shaping ---------------- */
+
+function shape(rows, heroes, opts) {
+  if (!Array.isArray(rows)) return { list: [], dropped: {} };
+
+  var cutoff = opts.days ? (Date.now()/1000 - opts.days*86400) : null;
+  var dropped = { short:0, window:0, turbo:0, unranked:0, malformed:0 };
+  var out = [];
+
+  rows.forEach(function (r) {
+    if (!r || typeof r !== "object") { dropped.malformed++; return; }
+
+    var slot = num(r.player_slot);
+    var dur  = num(r.duration);
+    var st   = num(r.start_time);
+    if (slot === null || typeof r.radiant_win !== "boolean" || dur === null || st === null) { dropped.malformed++; return; }
+
+    if (dur < MIN_DURATION) { dropped.short++; return; }
+    if (cutoff !== null && st < cutoff) { dropped.window++; return; }
+
+    var mode = num(r.game_mode);
+    if (opts.noTurbo && mode === 23) { dropped.turbo++; return; }
+
+    var lobby = num(r.lobby_type);
+    if (opts.rankedOnly && lobby !== 7) { dropped.unranked++; return; }
+
+    var radiant = slot < 128;
+    var mins = dur / 60;
+    var d = new Date(st * 1000);
+
+    out.push({
+      match_id: r.match_id != null ? r.match_id : null,
+      start: st, date: d, duration: dur, minutes: mins,
+      radiant: radiant, win: radiant === r.radiant_win,
+      hero_id: num(r.hero_id),
+      hero: heroes[r.hero_id] || (r.hero_id != null ? "Hero " + r.hero_id : "Unknown hero"),
+      kills: num(r.kills), deaths: num(r.deaths), assists: num(r.assists),
+      gold_per_min: num(r.gold_per_min), xp_per_min: num(r.xp_per_min),
+      last_hits: num(r.last_hits), denies: num(r.denies), level: num(r.level),
+      hero_damage: num(r.hero_damage), tower_damage: num(r.tower_damage),
+      lane_role: num(r.lane_role),
+      party_size: num(r.party_size),
+      lobby_type: lobby, game_mode: mode,
+      lh_per_min: num(r.last_hits) === null ? null : r.last_hits / mins,
+      hd_per_min: num(r.hero_damage) === null ? null : r.hero_damage / mins,
+      deaths_per_10: num(r.deaths) === null ? null : r.deaths / (mins / 10)
+    });
+  });
+
+  out.sort(function (a, b) { return a.start - b.start; });   // ascending, for session walking
+
+  var sess = 0, pos = 0, prevEnd = null;
+  out.forEach(function (m, i) {
+    if (prevEnd === null || (m.start - prevEnd) > SESSION_GAP) { sess++; pos = 1; }
+    else pos++;
+    m.session = sess; m.pos = pos;
+    prevEnd = m.start + m.duration;
+
+    if (pos === 1) m.prevBucket = "First of session";
+    else if (out[i-1].win) m.prevBucket = "After a win";
+    else if (pos >= 3 && !out[i-2].win) m.prevBucket = "After 2+ losses";
+    else m.prevBucket = "After a loss";
+  });
+
+  return { list: out, dropped: dropped, sessions: sess };
+}
+
+/* ---------------- statistics ---------------- */
+
+// Categorical: standard error of a proportion against the player baseline.
+function categorical(list, baseline, keyFn, order) {
+  var buckets = {};
+  list.forEach(function (m) {
+    var k = keyFn(m);
+    if (k === null || k === undefined) return;
+    if (!buckets[k]) buckets[k] = { key:k, n:0, w:0 };
+    buckets[k].n++; if (m.win) buckets[k].w++;
+  });
+
+  var rows = Object.keys(buckets).map(function (k) {
+    var b = buckets[k];
+    b.rate = b.w / b.n;
+    b.delta = b.rate - baseline;
+    b.se = Math.sqrt(baseline * (1 - baseline) / b.n);
+    b.sigma = b.se > 0 ? b.delta / b.se : 0;
+    b.eligible = b.n >= MIN_BUCKET;
+    return b;
+  });
+
+  if (order === "count") rows.sort(function (a,b){ return b.n - a.n || a.key.localeCompare(b.key); });
+  else if (typeof order === "function") rows.sort(order);
+  else if (Array.isArray(order)) {
+    var ix = {}; order.forEach(function (k,i){ ix[k]=i; });
+    rows.sort(function (a,b){
+      var ai = ix[a.key] === undefined ? 999 : ix[a.key];
+      var bi = ix[b.key] === undefined ? 999 : ix[b.key];
+      return ai - bi || b.n - a.n;
+    });
+  }
+  return rows;
+}
+
+function mean(a){ var s=0; for(var i=0;i<a.length;i++) s+=a[i]; return s/a.length; }
+function variance(a, mu){ if (a.length < 2) return 0; var s=0; for(var i=0;i<a.length;i++){ var d=a[i]-mu; s+=d*d; } return s/(a.length-1); }
+
+// Welch: two populations, different variances, different sizes.
+function welch(list, metrics) {
+  return metrics.map(function (mt) {
+    var W = [], L = [];
+    list.forEach(function (m) {
+      var v = m[mt.key];
+      if (v === null || v === undefined || !isFinite(v)) return;
+      (m.win ? W : L).push(v);
+    });
+    var row = { key: mt.key, label: mt.label, dp: mt.dp, nW: W.length, nL: L.length,
+                mW: null, mL: null, delta: null, t: null, eligible: false, present: W.length + L.length > 0 };
+    if (W.length >= 2 && L.length >= 2) {
+      var mw = mean(W), ml = mean(L);
+      var vw = variance(W, mw), vl = variance(L, ml);
+      var seD = Math.sqrt(vw / W.length + vl / L.length);
+      row.mW = mw; row.mL = ml; row.delta = mw - ml;
+      row.t = seD > 0 ? (mw - ml) / seD : 0;
+      row.sdW = Math.sqrt(vw); row.sdL = Math.sqrt(vl);
+      row.eligible = true;
+    }
+    return row;
+  }).filter(function (r) { return r.present; });
+}
+
+/* ---------------- analysis assembly ---------------- */
+
+var TOD_ORDER = [];
+for (var _h = 0; _h < 24; _h += 3) TOD_ORDER.push(pad2(_h) + ":00 to " + pad2(_h+2) + ":59");
+var DOW_ORDER = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+var LEN_ORDER = ["Under 25 min","25 to 35 min","35 to 45 min","Over 45 min"];
+var POS_ORDER = ["1st of session","2nd","3rd","4th","5th","6th or later"];
+var TILT_ORDER = ["First of session","After a win","After a loss","After 2+ losses"];
+var PARTY_ORDER = ["Solo","Party of 2","Party of 3","Party of 4","Party of 5","Unknown"];
+var LANE_ORDER = ["Safe lane","Mid lane","Off lane","Jungle","Unparsed"];
+
+function lengthBand(m){
+  var x = m.minutes;
+  return x < 25 ? LEN_ORDER[0] : x < 35 ? LEN_ORDER[1] : x < 45 ? LEN_ORDER[2] : LEN_ORDER[3];
+}
+function monthKey(m){ return m.date.getFullYear() + "-" + pad2(m.date.getMonth()+1); }
+
+function buildBlocks(list, baseline, picked) {
+  var out = [];
+  function cat(id, keyFn, order, noFinding) {
+    var meta = null;
+    for (var i=0;i<ANALYSES.length;i++) if (ANALYSES[i].id === id) meta = ANALYSES[i];
+    var rows = categorical(list, baseline, keyFn, order);
+    if (id === "month") rows = rows.slice(0, 14);
+    out.push({
+      id:id, name:meta.name, desc:meta.desc, sheet:meta.sheet, kind:"cat",
+      rows:rows, noFinding:noFinding || [],
+      findings:catFindings(rows, baseline, noFinding || [])
+    });
+  }
+
+  if (picked.hero)    cat("hero",    function(m){ return m.hero; }, "count");
+  if (picked.length)  cat("length",  lengthBand, LEN_ORDER);
+  if (picked.tod)     cat("tod",     function(m){ return TOD_ORDER[Math.floor(m.date.getHours()/3)]; }, TOD_ORDER);
+  if (picked.dow)     cat("dow",     function(m){ return WEEKDAY[m.date.getDay()]; }, DOW_ORDER);
+  if (picked.session) cat("session", function(m){ return m.pos >= 6 ? POS_ORDER[5] : POS_ORDER[m.pos-1]; }, POS_ORDER);
+  if (picked.tilt)    cat("tilt",    function(m){ return m.prevBucket; }, TILT_ORDER, ["First of session"]);
+  if (picked.side)    cat("side",    function(m){ return m.radiant ? "Radiant" : "Dire"; }, ["Radiant","Dire"]);
+  if (picked.party)   cat("party",   function(m){
+      var s = m.party_size;
+      if (s === null || s < 1) return "Unknown";
+      return s === 1 ? "Solo" : s >= 5 ? "Party of 5" : "Party of " + s;
+    }, PARTY_ORDER, ["Unknown"]);
+  if (picked.lane)    cat("lane",    function(m){ return LANE_ROLE[m.lane_role] || "Unparsed"; }, LANE_ORDER, ["Unparsed"]);
+  if (picked.modes)   cat("modes",   function(m){
+      var mo = GAME_MODE[m.game_mode] || ("Mode " + (m.game_mode === null ? "?" : m.game_mode));
+      var lo = LOBBY_TYPE[m.lobby_type] || ("Lobby " + (m.lobby_type === null ? "?" : m.lobby_type));
+      return mo + " / " + lo;
+    }, "count");
+  if (picked.month)   cat("month",   monthKey, function(a,b){ return b.key.localeCompare(a.key); });
+
+  [["econ", ECON_METRICS], ["combat", COMBAT_METRICS]].forEach(function (pair) {
+    if (!picked[pair[0]]) return;
+    var meta = null;
+    for (var i=0;i<ANALYSES.length;i++) if (ANALYSES[i].id === pair[0]) meta = ANALYSES[i];
+    var rows = welch(list, pair[1]);
+    out.push({ id:pair[0], name:meta.name, desc:meta.desc, sheet:meta.sheet, kind:"welch",
+               rows:rows, findings:welchFindings(rows) });
+  });
+
+  return out;
+}
+
+function catFindings(rows, baseline, noFinding) {
+  var hits = rows.filter(function (r) {
+    return r.eligible && noFinding.indexOf(r.key) < 0 && Math.abs(r.sigma) >= SIGMA_CAT;
+  }).sort(function (a,b) { return Math.abs(b.sigma) - Math.abs(a.sigma); });
+
+  return hits.map(function (r) {
+    return {
+      sigma: r.sigma, key: r.key,
+      text: r.key + " runs at " + pct(r.rate) + " over " + r.n + " games, " +
+            Math.abs(r.sigma).toFixed(2) + " standard errors " + (r.sigma > 0 ? "above" : "below") +
+            " the " + pct(baseline) + " datum."
+    };
+  });
+}
+
+function welchFindings(rows) {
+  return rows.filter(function (r) { return r.eligible && Math.abs(r.t) >= SIGMA_WELCH; })
+    .sort(function (a,b) { return Math.abs(b.t) - Math.abs(a.t); })
+    .map(function (r) {
+      return {
+        sigma: r.t, key: r.label,
+        text: r.label + " averages " + fmt(r.mW, r.dp) + " in wins against " + fmt(r.mL, r.dp) +
+              " in losses, a separation of " + Math.abs(r.t).toFixed(2) + " standard errors."
+      };
+    });
+}
+
+/* ---------------- xlsx export ---------------- */
+
+function colRef(n){ var s=""; n=n-1; while(n>=0){ s=String.fromCharCode(65+(n%26))+s; n=Math.floor(n/26)-1; } return s; }
+
+function buildWorkbook(R) {
+  var wb = XLSX.utils.book_new();
+  var used = {};
+  function addSheet(name, aoa, autofilter) {
+    var n = String(name).replace(/[\\\/\?\*\[\]:]/g, " ").slice(0, 31) || "Sheet";
+    var base = n, i = 2;
+    while (used[n.toLowerCase()]) { var suf = " " + i++; n = (base.slice(0, 31 - suf.length) + suf); }
+    used[n.toLowerCase()] = true;
+    var ws = XLSX.utils.aoa_to_sheet(aoa);
+    if (autofilter && aoa.length > 1) {
+      ws["!autofilter"] = { ref: "A1:" + colRef(aoa[0].length) + aoa.length };
+    }
+    XLSX.utils.book_append_sheet(wb, ws, n);
+    return ws;
+  }
+
+  /* summary */
+  var s = [
+    ["Dota deviation report"], [],
+    ["Account ID", R.accountId],
+    ["ID read as", R.how],
+    ["Generated", new Date().toISOString().replace("T"," ").slice(0,19) + " local machine time"],
+    ["Requested window", R.windowLabel],
+    ["Requested cap", R.cap],
+    ["Exclude Turbo", R.noTurbo ? "yes" : "no"],
+    ["Ranked only", R.rankedOnly ? "yes" : "no"], [],
+    ["Matches returned by API", R.returned],
+    ["Matches after filters", R.n],
+    ["Wins", R.wins], ["Losses", R.n - R.wins],
+    ["Baseline win rate", R.baseline],
+    ["Sample period", R.periodFrom + " to " + R.periodTo],
+    ["Play sessions", R.sessions], [],
+    ["Dropped, under 5 minutes", R.dropped.short],
+    ["Dropped, outside window", R.dropped.window],
+    ["Dropped, Turbo", R.dropped.turbo],
+    ["Dropped, not ranked", R.dropped.unranked],
+    ["Dropped, malformed", R.dropped.malformed], [],
+    ["Categorical significance floor (sigma)", SIGMA_CAT],
+    ["Wins vs losses floor (sigma)", SIGMA_WELCH],
+    ["Minimum games for a finding", MIN_BUCKET], [],
+    ["Findings"], ["Analysis", "Sigma", "Finding"]
+  ];
+  R.blocks.forEach(function (bl) {
+    if (!bl.findings.length) { s.push([bl.name, "", "No split clears the significance floor. Noise."]); return; }
+    bl.findings.forEach(function (f) { s.push([bl.name, Number(f.sigma.toFixed(3)), f.text]); });
+  });
+  addSheet("Summary", s);
+
+  /* one sheet per analysis */
+  R.blocks.forEach(function (bl) {
+    var aoa;
+    if (bl.kind === "cat") {
+      aoa = [["Bucket","Games","Wins","Losses","Win rate","Deviation from datum","Standard error","Sigma","Eligible for finding"]];
+      bl.rows.forEach(function (r) {
+        aoa.push([r.key, r.n, r.w, r.n - r.w, Number(r.rate.toFixed(5)), Number(r.delta.toFixed(5)),
+                  Number(r.se.toFixed(5)), Number(r.sigma.toFixed(3)),
+                  (r.eligible && bl.noFinding.indexOf(r.key) < 0) ? "yes" : "no"]);
+      });
+    } else {
+      aoa = [["Metric","Mean in wins","Mean in losses","Difference","SD wins","SD losses","n wins","n losses","Welch sigma"]];
+      bl.rows.forEach(function (r) {
+        aoa.push([r.label,
+          r.mW === null ? "" : Number(r.mW.toFixed(4)),
+          r.mL === null ? "" : Number(r.mL.toFixed(4)),
+          r.delta === null ? "" : Number(r.delta.toFixed(4)),
+          r.sdW === undefined ? "" : Number(r.sdW.toFixed(4)),
+          r.sdL === undefined ? "" : Number(r.sdL.toFixed(4)),
+          r.nW, r.nL, r.t === null ? "" : Number(r.t.toFixed(3))]);
+      });
+    }
+    aoa.push([]);
+    aoa.push(["Written findings"]);
+    if (bl.findings.length) bl.findings.forEach(function (f) { aoa.push([f.text]); });
+    else aoa.push(["No split clears the significance floor. Treat the variation in this block as noise."]);
+    addSheet(bl.sheet, aoa);
+  });
+
+  /* raw */
+  var raw = [["Match ID","Date","Time","Hour","Weekday","Hero","Result","Side","Duration (min)",
+    "Kills","Deaths","Assists","GPM","XPM","Last hits","Denies","Hero damage","Tower damage","Level",
+    "Party size","Lobby","Mode","Lane role","Session","Position in session","Previous result"]];
+  R.list.forEach(function (m) {
+    var d = m.date;
+    raw.push([
+      m.match_id, dstr(d), pad2(d.getHours()) + ":" + pad2(d.getMinutes()), d.getHours(), WEEKDAY[d.getDay()],
+      m.hero, m.win ? "Win" : "Loss", m.radiant ? "Radiant" : "Dire", Number(m.minutes.toFixed(2)),
+      m.kills, m.deaths, m.assists, m.gold_per_min, m.xp_per_min, m.last_hits, m.denies,
+      m.hero_damage, m.tower_damage, m.level,
+      m.party_size === null ? "unknown" : m.party_size,
+      LOBBY_TYPE[m.lobby_type] || (m.lobby_type === null ? "unknown" : "Lobby " + m.lobby_type),
+      GAME_MODE[m.game_mode] || (m.game_mode === null ? "unknown" : "Mode " + m.game_mode),
+      LANE_ROLE[m.lane_role] || "unparsed",
+      m.session, m.pos, m.prevBucket
+    ]);
+  });
+  addSheet("Raw matches", raw, true);
+
+  return wb;
+}
+
+var SAVE_ERRORS = {
+  declined:            "Export cancelled.",
+  rate_limited:        "A save prompt is already open. Finish that one, then try again.",
+  too_large:           "The workbook is larger than the chosen destination accepts.",
+  rejected_extension:  "This view will not accept an xlsx file.",
+  extension_not_enabled: "Workbook files are switched off in this view.",
+  bad_request:         "The export was built incorrectly. That is a bug in this page.",
+  request_unknown:     "The export request expired.",
+  unavailable:         "Saving files is not available in this view."
+};
+
+// The hosted viewer never lets a page start its own download, so the file is
+// handed over through the downloads capability. Opened as a plain local file
+// there is no capability, and the ordinary anchor is used instead.
+function exportWorkbook(R, mode, ns, note) {
+  var buf, blob;
+  try {
+    var wb = buildWorkbook(R);
+    buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  } catch (err) {
+    note("Could not build the workbook: " + (err && err.message ? err.message : "unknown error") + ".");
+    return;
+  }
+  var filename = "dota-deviation-" + R.accountId + "-" + dstr(new Date()) + ".xlsx";
+
+  if (mode === "capability" && ns && typeof ns.save === "function") {
+    note("Waiting for you to confirm the save…");
+    ns.save({ filename: filename, data: blob }).then(function (res) {
+      note(res && res.status === "delivered" ? "Workbook delivered." : "Workbook saved.");
+    }, function (err) {
+      var codeKey = err && err.code ? err.code : "unavailable";
+      note(SAVE_ERRORS[codeKey] || SAVE_ERRORS.unavailable);
+    });
+    return;
+  }
+
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  note("Workbook written to your downloads.");
+}
+
+/* ---------------- view: deviation track ---------------- */
+
+function Track(props) {
+  var frac = props.scale > 0 ? clamp(Math.abs(props.delta) / props.scale, 0, 1) * 50 : 0;
+  var up = props.delta >= 0;
+  var cls = "bar " + (props.thin ? "thin" : up ? "up" : "dn");
+  var style = { opacity: props.opacity };
+  if (up) { style.left = "50%"; style.width = frac + "%"; }
+  else { style.right = "50%"; style.width = frac + "%"; }
+  return div({ className: "track" },
+    div({ className: "datum" }),
+    frac > 0 ? div({ className: cls, style: style }) : null
+  );
+}
+
+function opacityFor(n, maxN) {
+  if (!maxN) return 0.2;
+  return clamp(Math.sqrt(n / maxN), 0.2, 1);
+}
+
+/* ---------------- view: analysis blocks ---------------- */
+
+function CatBlock(props) {
+  var bl = props.block, baseline = props.baseline;
+  var rows = bl.rows;
+  var eligible = rows.filter(function (r) { return r.eligible && bl.noFinding.indexOf(r.key) < 0; });
+  var maxN = rows.reduce(function (a, r) { return Math.max(a, r.n); }, 0);
+  var scale = Math.max(0.08, eligible.reduce(function (a, r) { return Math.max(a, Math.abs(r.delta)); }, 0));
+  var thinCount = rows.length - eligible.length;
+
+  return section({ className: "block" },
+    header(null,
+      h3_(null, bl.name),
+      span({ className: "meta" }, rows.length + (rows.length === 1 ? " bucket, " : " buckets, ") + eligible.length + " above " + MIN_BUCKET + " games")
+    ),
+    p_({ className: "desc" }, bl.desc),
+    rows.length === 0
+      ? p_({ className: "desc" }, "No matches in the filtered sample carry this field.")
+      : div({ className: "scroller" },
+          div({ className: "dev" },
+            div({ className: "hd" },
+              div(null, "Bucket"), div({ className: "r" }, "n"), div({ className: "r" }, "Win rate"),
+              div(null, "Deviation, ±" + (scale*100).toFixed(1) + " pts full scale"), div({ className: "r" }, "Sigma")
+            ),
+            rows.map(function (r) {
+              var thin = !r.eligible || bl.noFinding.indexOf(r.key) >= 0;
+              return div({ className: "row" + (thin ? " thin" : ""), key: r.key },
+                div({ className: "lb", title: r.key }, r.key),
+                div({ className: "r num" }, r.n),
+                div({ className: "r num" }, pct(r.rate)),
+                e(Track, { delta: r.delta, scale: scale, thin: thin, opacity: opacityFor(r.n, maxN) }),
+                div({ className: "r num" }, thin ? "—" : sig(r.sigma))
+              );
+            })
+          )
+        ),
+    div({ className: "foot" },
+      bl.findings.length
+        ? bl.findings.map(function (f, i) {
+            return p_({ key: i }, b_({ className: f.sigma > 0 ? "up" : "dn" }, sig(f.sigma) + " σ  "), f.text);
+          })
+        : p_({ className: "quiet" }, "Nothing in this split reaches " + SIGMA_CAT + " standard errors from the datum. There is no finding here. Treat the variation as noise."),
+      thinCount > 0
+        ? p_({ className: "caveat" }, thinCount + (thinCount === 1 ? " bucket sits" : " buckets sit") +
+            " below the " + MIN_BUCKET + " game threshold, or is a category that cannot mean anything, and " +
+            (thinCount === 1 ? "is" : "are") + " shown muted. " +
+            "They are in the table so you can see what was measured, not so you can act on them.")
+        : null
+    )
+  );
+}
+
+function WelchBlock(props) {
+  var bl = props.block;
+  var scale = Math.max(3, bl.rows.reduce(function (a, r) { return Math.max(a, r.t === null ? 0 : Math.abs(r.t)); }, 0));
+  var maxN = bl.rows.reduce(function (a, r) { return Math.max(a, r.nW + r.nL); }, 0);
+
+  return section({ className: "block" },
+    header(null,
+      h3_(null, bl.name),
+      span({ className: "meta" }, "Welch, unequal variance and unequal n")
+    ),
+    p_({ className: "desc" }, bl.desc),
+    div({ className: "scroller" },
+      div({ className: "wl" },
+        div({ className: "hd" },
+          div(null, "Metric"), div({ className: "r" }, "Wins"), div({ className: "r" }, "Losses"),
+          div({ className: "r" }, "Diff"), div(null, "Separation, ±" + scale.toFixed(1) + " σ full scale"), div({ className: "r" }, "Sigma")
+        ),
+        bl.rows.map(function (r) {
+          var thin = !r.eligible || Math.abs(r.t) < SIGMA_WELCH;
+          return div({ className: "row" + (thin ? " thin" : ""), key: r.key },
+            div({ className: "lb" }, r.label),
+            div({ className: "r num" }, fmt(r.mW, r.dp)),
+            div({ className: "r num" }, fmt(r.mL, r.dp)),
+            div({ className: "r num" }, r.delta === null ? "—" : (r.delta >= 0 ? "+" : "−") + Math.abs(r.delta).toFixed(r.dp)),
+            e(Track, { delta: r.t || 0, scale: scale, thin: thin, opacity: opacityFor(r.nW + r.nL, maxN) }),
+            div({ className: "r num" }, r.t === null ? "—" : sig(r.t))
+          );
+        })
+      )
+    ),
+    div({ className: "foot" },
+      bl.findings.length
+        ? bl.findings.map(function (f, i) {
+            return p_({ key: i }, b_({ className: f.sigma > 0 ? "up" : "dn" }, sig(f.sigma) + " σ  "), f.text);
+          })
+        : p_({ className: "quiet" }, "No metric separates the two populations by " + SIGMA_WELCH + " standard errors. Treat this block as noise."),
+      p_({ className: "caveat" }, "Read direction with care. Most of these figures are consequences of the result as much as causes of it. Winning games run longer in your favour, so gold, damage and last hits accumulate; losing games hand the enemy kills. A large separation here confirms that wins looked like wins. It does not by itself tell you which lever to pull.")
+    )
+  );
+}
+
+/* ---------------- view: readout and headline ---------------- */
+
+function Readout(props) {
+  var R = props.R;
+  function cell(k, v, small) {
+    return div({ className: "cell", key: k },
+      div({ className: "k" }, k),
+      div({ className: "v" + (small ? " small" : "") }, v));
+  }
+  return div({ className: "readout" },
+    cell("MATCHES", String(R.n)),
+    cell("WINS", String(R.wins)),
+    cell("LOSSES", String(R.n - R.wins)),
+    cell("BASELINE WIN RATE", pct(R.baseline, 2)),
+    cell("SAMPLE PERIOD", R.periodFrom + "  to  " + R.periodTo, true)
+  );
+}
+
+function Headline(props) {
+  var all = [];
+  props.blocks.forEach(function (bl) {
+    bl.findings.forEach(function (f) { all.push({ f: f, from: bl.name }); });
+  });
+  all.sort(function (a, b) { return Math.abs(b.f.sigma) - Math.abs(a.f.sigma); });
+  var top = all.slice(0, 4);
+
+  return div({ className: "headline" },
+    h2_(null, "Strongest findings"),
+    top.length === 0
+      ? p_({ style: { margin: 0, fontSize: "13px", color: "var(--ink-2)" } },
+          "Nothing in this sample clears the significance floor in any analysis. That is a real result, not a failure of the tool. On " + props.n +
+          " matches the noise floor is wide, and it means no split you selected is distinguishable from your overall " + pct(props.baseline) +
+          " win rate. Widen the window or gather more games before reading anything into the tables below.")
+      : ul({ className: "fl" }, top.map(function (t, i) {
+          return li({ key: i },
+            span({ className: "sg " + (t.f.sigma > 0 ? "up" : "dn") }, sig(t.f.sigma) + " σ"),
+            span(null, t.f.text, " ", span({ className: "src" }, "(" + t.from + ")"))
+          );
+        }))
+  );
+}
+
+/* ---------------- view: application ---------------- */
+
+function App() {
+  var st = React.useState(""), idText = st[0], setIdText = st[1];
+  var s2 = React.useState("3m"), win = s2[0], setWin = s2[1];
+  var s3 = React.useState(1000), cap = s3[0], setCap = s3[1];
+  var s4 = React.useState(true), noTurbo = s4[0], setNoTurbo = s4[1];
+  var s5 = React.useState(false), rankedOnly = s5[0], setRankedOnly = s5[1];
+  var s6 = React.useState(function () {
+    var o = {}; ANALYSES.forEach(function (a) { o[a.id] = true; }); return o;
+  }), picked = s6[0], setPicked = s6[1];
+  var s7 = React.useState("idle"), phase = s7[0], setPhase = s7[1];
+  var s8 = React.useState(null), problem = s8[0], setProblem = s8[1];
+  var s9 = React.useState(null), R = s9[0], setR = s9[1];
+
+  var hasUse = !!(window.claude && typeof window.claude.use === "function");
+  var sa = React.useState(hasUse ? "pending" : "anchor"), saveMode = sa[0], setSaveMode = sa[1];
+  var sb = React.useState(null), saveNote = sb[0], setSaveNote = sb[1];
+  var dlRef = React.useRef(null);
+
+  React.useEffect(function () {
+    if (!hasUse) return;
+    var live = true;
+    window.claude.use("downloads").then(function (ns) {
+      if (!live) return;
+      dlRef.current = ns;
+      setSaveMode(ns ? "capability" : "none");
+    }, function () { if (live) setSaveMode("none"); });
+    return function () { live = false; };
+  }, []);
+
+  var heroCache = React.useRef(null);
+  var anyPicked = ANALYSES.some(function (a) { return picked[a.id]; });
+
+  function toggle(id) {
+    setPicked(function (prev) { var n = {}; for (var k in prev) n[k] = prev[k]; n[id] = !n[id]; return n; });
+  }
+  function setAll(v) {
+    setPicked(function () { var o = {}; ANALYSES.forEach(function (a) { o[a.id] = v; }); return o; });
+  }
+
+  function run() {
+    var parsed = parseAccountId(idText);
+    if (parsed.error) { setProblem({ kind: "input", title: "Check the account ID", body: [parsed.error] }); setPhase("idle"); setR(null); return; }
+    if (!anyPicked) { setProblem({ kind: "input", title: "Nothing selected", body: ["Tick at least one analysis before generating."] }); setPhase("idle"); return; }
+
+    setPhase("loading"); setProblem(null); setSaveNote(null);
+
+    var windowDef = WINDOWS.filter(function (w) { return w.id === win; })[0] || WINDOWS[1];
+    var heroP = heroCache.current ? Promise.resolve(heroCache.current) : fetchHeroes();
+
+    heroP.then(function (heroes) {
+      heroCache.current = heroes;
+      return fetchMatches(parsed.id, cap, windowDef.days).then(function (rows) {
+        var returned = Array.isArray(rows) ? rows.length : 0;
+
+        if (returned === 0) {
+          throw new ApiError("empty",
+            "OpenDota returned an empty list for account " + parsed.id + ". Almost always this means Expose Public Match Data is switched off in your Dota 2 privacy settings. Open Dota 2, go to Settings, then Options, then Advanced Options, and turn on Expose Public Match Data. Matches played before you turned it on stay hidden, so play one game and give OpenDota a few minutes to pick it up. The other possibility is that the account ID is valid but belongs to somebody who has never played.");
+        }
+
+        var shaped = shape(rows, heroes, { days: windowDef.days, noTurbo: noTurbo, rankedOnly: rankedOnly });
+        var list = shaped.list;
+
+        if (list.length < MIN_SAMPLE) {
+          throw new ApiError("thin",
+            "Only " + list.length + " match" + (list.length === 1 ? "" : "es") + " survived the filters, out of " + returned +
+            " returned. That is below the " + MIN_SAMPLE + " match minimum, so the report is refused rather than produced. " +
+            "With a sample that small the standard error on any win rate is wider than any effect worth reading, and every number the tool printed would be an invitation to fool yourself. " +
+            "Widen the time window, raise the match cap, or relax the Turbo and ranked filters. " +
+            "Dropped: " + shaped.dropped.short + " under five minutes, " + shaped.dropped.window + " outside the window, " +
+            shaped.dropped.turbo + " Turbo, " + shaped.dropped.unranked + " not ranked, " + shaped.dropped.malformed + " missing required fields.");
+        }
+
+        var wins = list.reduce(function (a, m) { return a + (m.win ? 1 : 0); }, 0);
+        var baseline = wins / list.length;
+        var blocks = buildBlocks(list, baseline, picked);
+
+        setR({
+          accountId: parsed.id, how: parsed.how,
+          windowLabel: windowDef.label, cap: cap, noTurbo: noTurbo, rankedOnly: rankedOnly,
+          returned: returned, dropped: shaped.dropped, sessions: shaped.sessions,
+          list: list, n: list.length, wins: wins, baseline: baseline,
+          periodFrom: dstr(list[0].date), periodTo: dstr(list[list.length - 1].date),
+          blocks: blocks
+        });
+        setPhase("done");
+      });
+    }).catch(function (err) {
+      setR(null); setPhase("idle");
+      setProblem({
+        kind: err && err.kind === "empty" ? "privacy" : "api",
+        title: err && err.kind === "empty" ? "No public matches on that account"
+             : err && err.kind === "thin" ? "Sample too small to analyse"
+             : err && err.kind === "notfound" ? "Account not found"
+             : err && err.kind === "rate" ? "Rate limited by OpenDota"
+             : "Could not complete the request",
+        body: [err && err.message ? err.message : "An unexpected error stopped the run."]
+      });
+    });
+  }
+
+  function onKey(ev) { if (ev.key === "Enter") run(); }
+
+  /* --- control panel --- */
+  var controls = div({ className: "panel" },
+    h2_(null, "Control panel"),
+    p_({ className: "hint" }, "Nothing is stored and nothing leaves your browser except the two requests to OpenDota's public API. There is no login, because reading public match history does not need one."),
+
+    div({ className: "fieldgrid" },
+      div({ className: "field", style: { gridColumn: "span 2", minWidth: 0 } },
+        label({ htmlFor: "acct" }, "Dota 2 friend ID"),
+        input({
+          id: "acct", type: "text", value: idText, onChange: function (ev) { setIdText(ev.target.value); },
+          onKeyDown: onKey, placeholder: "e.g. 86745912", autoComplete: "off", spellCheck: false,
+          "aria-describedby": "acct-note"
+        }),
+        span({ className: "note", id: "acct-note" },
+          "Also accepts a 17 digit Steam ID, or a pasted steamcommunity.com/profiles, Dotabuff or OpenDota profile URL. A steamcommunity.com/id/yourname link cannot be resolved here, so use the friend ID shown on your Dota 2 profile instead.")
+      ),
+      div({ className: "field" },
+        label({ htmlFor: "win" }, "Time window"),
+        select({ id: "win", value: win, onChange: function (ev) { setWin(ev.target.value); } },
+          WINDOWS.map(function (w) { return option({ key: w.id, value: w.id }, w.label); })),
+        span({ className: "note" }, "Filtered on match start time, twice: once at the API and once here.")
+      ),
+      div({ className: "field" },
+        label({ htmlFor: "cap" }, "Maximum matches"),
+        select({ id: "cap", value: String(cap), onChange: function (ev) { setCap(Number(ev.target.value)); } },
+          CAPS.map(function (c) { return option({ key: c, value: String(c) }, String(c)); })),
+        span({ className: "note" }, "A hard ceiling on the request. The window above is the real control.")
+      )
+    ),
+
+    hr({ className: "divider" }),
+    p_({ className: "subhead" }, "Filters"),
+    div({ className: "checkgrid" },
+      label({ className: "check inline" },
+        input({ type: "checkbox", checked: noTurbo, onChange: function () { setNoTurbo(!noTurbo); } }),
+        span(null, "Exclude Turbo")),
+      label({ className: "check inline" },
+        input({ type: "checkbox", checked: rankedOnly, onChange: function () { setRankedOnly(!rankedOnly); } }),
+        span(null, "Ranked matches only"))
+    ),
+
+    hr({ className: "divider" }),
+    div({ style: { display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: "8px" } },
+      p_({ className: "subhead", style: { margin: 0 } }, "Analyses"),
+      div({ style: { display: "flex", gap: "14px" } },
+        button({ className: "link", type: "button", onClick: function () { setAll(true); } }, "Select all"),
+        button({ className: "link", type: "button", onClick: function () { setAll(false); } }, "Clear all"))
+    ),
+    div({ className: "checkgrid", style: { marginTop: "10px" } },
+      ANALYSES.map(function (a) {
+        return label({ className: "check", key: a.id },
+          input({ type: "checkbox", checked: !!picked[a.id], onChange: function () { toggle(a.id); } }),
+          span(null, a.name));
+      })
+    ),
+
+    div({ className: "toolbar" },
+      button({ type: "button", onClick: run, disabled: phase === "loading" },
+        phase === "loading" ? "Reading match history…" : "Generate report"),
+      R && saveMode !== "none"
+        ? button({ className: "ghost", type: "button", disabled: saveMode === "pending",
+            onClick: function () { setSaveNote(null); exportWorkbook(R, saveMode, dlRef.current, setSaveNote); } },
+            saveMode === "pending" ? "Preparing export…" : "Export workbook")
+        : null,
+      R && saveMode === "none"
+        ? span({ className: "status" }, "This view will not let the page hand you a file, so the workbook export is hidden. The copy in the repository, opened directly in a browser, exports normally.")
+        : null,
+      saveNote ? span({ className: "status" }, saveNote) : null,
+      phase === "loading" ? span({ className: "status" }, "Two calls to OpenDota, then everything is computed locally.") : null
+    )
+  );
+
+  /* --- method panel, shown before a run --- */
+  var method = div({ className: "panel method" },
+    h2_(null, "How this measures"),
+    p_({ className: "hint" }, "The instrument treats your overall win rate on the filtered sample as the datum, and asks whether any split sits far enough off that line to be distinguishable from sampling noise."),
+    dl(null,
+      dt(null, "Datum"), dd(null, "Your own win rate across the filtered sample. Not 50%, and not anybody else's."),
+      dt(null, "Categorical splits"), dd(null, "Standard error on the proportion, the square root of p times one minus p divided by the bucket size, with p the datum. The reported sigma is how many of those standard errors the bucket sits from the line."),
+      dt(null, "Suppression"), dd(null, "Below " + SIGMA_CAT + " sigma, or below " + MIN_BUCKET + " games, no finding is written. The bucket still appears in the table, muted, so you can see it was measured."),
+      dt(null, "Wins against losses"), dd(null, "Welch's comparison, two populations with different variances and different sizes. A finding needs " + SIGMA_WELCH + " sigma."),
+      dt(null, "Abandons"), dd(null, "Any match under five minutes is discarded before anything is counted."),
+      dt(null, "Sessions"), dd(null, "Measured end of one match to start of the next. A gap over three hours opens a new session."),
+      dt(null, "Missing fields"), dd(null, "OpenDota only fills lane role and some detail on parsed matches, which is a minority. Nothing is inferred to fill a gap. Unmeasured is reported as unmeasured.")
+    ),
+    p_({ className: "hint", style: { marginTop: "14px", marginBottom: 0 } },
+      "One honest limit worth stating up front. Every split below is an observed correlation on a sample you did not randomise. A bucket clearing " + SIGMA_CAT +
+      " sigma has cleared a low bar, and running thirteen analyses at once means some buckets will clear it by chance alone. Treat a finding as a hypothesis to test against the next hundred games, not a conclusion.")
+  );
+
+  /* --- problem messages --- */
+  var msg = problem ? div({ className: "msg " + (problem.kind === "input" ? "warn" : "err") },
+    b_(null, problem.title),
+    problem.body.map(function (t, i) { return p_({ key: i }, t); })
+  ) : null;
+
+  return div(null,
+    div({ className: "masthead" },
+      React.createElement("h1", null, "Dota deviation report"),
+      p_({ className: "sub" }, "An instrument, not a coach. It reads your public OpenDota match history, takes your own win rate as the datum, and reports which conditions sit far enough off that line to be worth believing."),
+      div({ className: "stamp" },
+        span(null, "Source: OpenDota public API"),
+        span(null, "Datum: player baseline"),
+        span(null, "Categorical floor: " + SIGMA_CAT.toFixed(1) + " σ"),
+        span(null, "Welch floor: " + SIGMA_WELCH.toFixed(1) + " σ"),
+        span(null, "Minimum bucket: " + MIN_BUCKET + " games")
+      )
+    ),
+    msg,
+    controls,
+    R ? div({ className: "reveal", key: R.accountId + "-" + R.n },
+          e(Readout, { R: R }),
+          e(Headline, { blocks: R.blocks, baseline: R.baseline, n: R.n }),
+          R.blocks.map(function (bl) {
+            return bl.kind === "cat"
+              ? e(CatBlock, { key: bl.id, block: bl, baseline: R.baseline })
+              : e(WelchBlock, { key: bl.id, block: bl });
+          }),
+          div({ className: "panel", style: { marginTop: "18px" } },
+            h2_(null, "Run record"),
+            p_({ className: "hint", style: { marginBottom: 0 } },
+              "Account " + R.accountId + ", " + R.how + ". Requested " + R.windowLabel.toLowerCase() + " capped at " + R.cap +
+              " matches; OpenDota returned " + R.returned + " and " + R.n + " survived the filters, spanning " + R.sessions + " play sessions. " +
+              "Discarded: " + R.dropped.short + " under five minutes, " + R.dropped.window + " outside the window, " +
+              R.dropped.turbo + " Turbo, " + R.dropped.unranked + " not ranked, " + R.dropped.malformed + " missing required fields.")
+          )
+        )
+      : method
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(e(App));
+})();
+</script>

@@ -1,0 +1,72 @@
+# Dota deviation report
+
+A single file browser tool that reads a Dota 2 player's public match history from
+the OpenDota API and reports which conditions correlate with winning, treating the
+question as an instrumentation problem rather than a coaching one.
+
+Open `index.html` in any browser. There is no build step, no server, no login and
+no API key. React and SheetJS load from a CDN; everything else is in the file.
+
+## What it measures
+
+The player's own win rate across the filtered sample is the datum. Every analysis
+asks whether a bucket sits far enough off that line to be distinguishable from
+sampling noise.
+
+For categorical splits the standard error on the proportion is
+`sqrt(p * (1 - p) / k)`, where `p` is the datum and `k` the bucket size. The
+reported sigma is how many of those standard errors the bucket sits from the datum.
+A bucket must clear 1.5 sigma and hold at least 8 games before a finding is
+written. Buckets below that threshold still appear in the table, muted, so it is
+visible what was measured without inviting anyone to act on it.
+
+For the wins against losses comparisons the two populations are compared with
+Welch's method, which assumes neither equal variance nor equal size. A finding
+needs 1.8 sigma.
+
+Thirteen analyses run at once, so some buckets will clear 1.5 sigma by chance
+alone. The tool says so on its own front page. A finding is a hypothesis to test
+against the next hundred games, not a conclusion.
+
+## Analyses
+
+Hero win rates, match length bands, time of day in three hour bands on local time,
+day of week, position within a play session, previous game result as a tilt check,
+Radiant against Dire, solo against stack size, lane role, game mode combined with
+lobby type, form by calendar month, an economy block and a combat block.
+
+## Data handling
+
+Matches shorter than five minutes are discarded as abandons. A win is determined
+by comparing `player_slot < 128` against `radiant_win`. Sessions are cut where more
+than three hours pass between the end of one match and the start of the next.
+
+OpenDota only populates parsed fields on a minority of matches, `lane_role` above
+all, and it frequently returns a null `party_size`. Every field is read defensively
+and nothing is inferred to fill a gap. Unparsed and unknown are reported as their
+own buckets and never produce a finding.
+
+## Account ID
+
+The input accepts a 32 bit friend ID, a 17 bit Steam ID which is converted with
+BigInt so no precision is lost, or a pasted profile URL from Steam, Dotabuff or
+OpenDota. A `steamcommunity.com/id/name` vanity URL cannot be resolved, because
+that requires a Steam Web API key called from a server. The Steam Web API sends no
+CORS headers, so a browser page cannot call it at all regardless of key.
+
+An empty response from OpenDota almost always means the player has not enabled
+Expose Public Match Data in their Dota 2 privacy settings. The tool says this
+explicitly rather than showing an empty report. Fewer than ten matches surviving
+the filters is refused rather than analysed.
+
+## Export
+
+The export button builds an xlsx workbook with SheetJS containing a summary sheet
+with run metadata and every written finding, one sheet per analysis with the
+underlying counts and sigma values, and a raw sheet with one row per match under an
+autofilter.
+
+When the page is opened as a local file the workbook downloads through an ordinary
+anchor element. When it is served inside the Claude artifact viewer, which does not
+permit a page to start its own download, the file is handed over through the
+viewer's downloads capability instead.
