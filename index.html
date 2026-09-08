@@ -216,6 +216,7 @@ var div=tag("div"), span=tag("span"), p_=tag("p"), h2_=tag("h2"), h3_=tag("h3"),
 
 var STEAM64_BASE = 76561197960265728n;
 var API = "https://api.opendota.com/api";
+var IN_GAME = "In Dota 2, click your name at the top left of the main menu. Your Friend ID is shown on the profile page that opens. That number is exactly what this field wants.";
 var MIN_DURATION = 300;          // 5 minutes; shorter is an abandon
 var MIN_BUCKET   = 8;            // games before a bucket may produce a finding
 var SIGMA_CAT    = 1.5;          // categorical significance floor
@@ -1095,9 +1096,10 @@ function App() {
       if (err && err.kind === "network") { setManual(true); setNameQuery(name); }
       if (err && err.kind === "timeout") {
         setProblem({ kind: "api", title: "OpenDota's name search timed out",
-          body: ["The name search scans a very large table and is by some distance the slowest and least reliable endpoint OpenDota offers. A timeout there says nothing about your account.",
-                 "Do not wait on it. Put your numeric friend ID in the field instead, which uses a completely different and much faster endpoint. You will find that number on your own Dota 2 profile page, shown under your name.",
-                 "If you do not know it and the search will not answer, https://www.dotabuff.com/search?q=" + encodeURIComponent(name) + " indexes the same accounts and the number appears in the URL of your profile there."] });
+          body: ["Do not retry it. OpenDota's name search scans a very large table and is by a distance the least reliable endpoint they offer. When it is down, it stays down for a while, and nothing about that reflects on your account.",
+                 "Get the number from the game instead, which takes ten seconds and cannot fail. " + IN_GAME,
+                 "If your Steam ID is what you have, you do not need to look anything up at all: the Friend ID is that number minus 76561197960265728, which this field will do for you if you paste the 17 digit Steam ID straight in.",
+                 "https://www.dotabuff.com/search?q=" + encodeURIComponent(name) + " is an independent index if you want a second opinion, and the number appears in your profile URL there."] });
         return;
       }
       fail(err);
@@ -1281,13 +1283,15 @@ function App() {
 
     div({ className: "step" },
       p_({ className: "n" }, "0. Find your account number, if you only know your name"),
+      p_({ className: "hint", style: { margin: "0 0 9px" } },
+        "Try the game first, it is faster and it always works. " + IN_GAME + " The name search below is only a fallback, and OpenDota's search endpoint is frequently down."),
       div({ className: "field", style: { marginBottom: "7px" } },
         input({ type: "text", value: nameQuery, onChange: function (ev) { setNameQuery(ev.target.value); },
                 placeholder: "Your Dota 2 display name", autoComplete: "off", spellCheck: false, "aria-label": "Dota 2 display name" })),
       nq ? div({ className: "urlbox" },
         React.createElement("a", { href: searchUrl(nq), target: "_blank", rel: "noopener noreferrer" }, searchUrl(nq))) : null,
       p_({ className: "hint", style: { margin: "0 0 7px" } },
-        "Open it, copy the response, paste it here and press Show accounts. Every public account under that name appears with its number and last match date. Nothing at all means OpenDota has never been allowed to attribute a match to you, which is the Expose Public Match Data setting inside Dota 2 under Settings, Options, Advanced Options, not your Steam profile privacy."),
+        "Open it, copy the response, paste it here and press Show accounts. Every public account under that name appears with its number and last match date. If the URL hangs rather than answering, that is OpenDota's search being down, so use the game instead. Nothing at all means OpenDota has never been allowed to attribute a match to you, which is the Expose Public Match Data setting inside Dota 2 under Settings, Options, Advanced Options, not your Steam profile privacy."),
       React.createElement("textarea", { value: searchText, onChange: function (ev) { setSearchText(ev.target.value); },
         placeholder: '[{"account_id":195286385,"personaname":"bijson","last_match_time":"2026-09-01T18:22:05.000Z"}]',
         spellCheck: false, "aria-label": "Search results JSON" }),
@@ -1324,6 +1328,7 @@ function App() {
       "An instrument, not a coach. It reads every match in a public OpenDota history inside the window you set, takes that player's own win rate as the datum, and reports which conditions sit far enough off that line to be worth believing."),
     dl(null,
       dt(null, "The ID field"), dd(null, "Takes a 32 bit friend ID, a 17 bit Steam ID, a steamID3 like [U:1:195286385], a classic STEAM_0:1:97643192, a Steam, Dotabuff, OpenDota or Stratz profile URL, or simply a Dota 2 display name, which is looked up and offered as a list to choose from."),
+      dt(null, "Finding your Friend ID"), dd(null, IN_GAME + " It is also pure arithmetic from a Steam ID, being the 17 digit number minus 76561197960265728, so if you have one you already have the other. Looking an account up by display name goes through OpenDota's search endpoint, which is often down, and only contains accounts that have opted in to public match data in the first place."),
       dt(null, "Datum"), dd(null, "The player's own win rate across every match that passed the filters. Not 50%, and not anybody else's."),
       dt(null, "Coverage"), dd(null, "Every match OpenDota returns inside the window is used. Nothing is sampled, subsampled, averaged away or thrown out beyond the exclusions listed here, and the run record at the foot of each report states how many were dropped and why."),
       dt(null, "Categorical splits"), dd(null, "Standard error on the proportion, the square root of p times one minus p divided by the bucket size, with p the datum. Sigma is how many of those standard errors the bucket sits from the line."),
