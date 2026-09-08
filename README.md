@@ -65,8 +65,20 @@ Radiant against Dire, solo against stack size, lane role (off by default, since
 it needs parsed matches) and form by calendar month.
 
 Contribution rankings, each a mean per hero measured against your own overall
-figure: hero damage per minute, weighted KDA being kills plus three tenths of
-assists over deaths, and stun seconds applied per match.
+figure: hero damage per minute, and weighted KDA being kills plus three tenths
+of assists over deaths.
+
+Items against win rate for your three most played heroes, where each item's win
+rate is measured against that hero's own win rate rather than your overall one,
+because comparing a Pudge item against a rate dominated by other heroes would
+measure the hero and not the item. Items are the final inventory, so read that
+block with more suspicion than the rest: an expensive item is partly a
+consequence of the game going well rather than a cause of it.
+
+If OpenDota's match list does not return item columns, the block says so and
+offers an explicit opt-in fetch. Items are only guaranteed on the single match
+endpoint, which is one request per match, so it is throttled to roughly fifty a
+minute, is interruptible, and backs off rather than hammering a free API.
 
 The two families are headlined separately. Contribution metrics separate far
 harder than win rate splits because they are partly structural, a mid laner out
