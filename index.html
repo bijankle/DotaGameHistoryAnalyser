@@ -42,17 +42,19 @@ body{
 .num{font-variant-numeric:tabular-nums;font-family:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
 
 /* ---------- masthead ---------- */
-.masthead{border-bottom:2px solid var(--ink);padding-bottom:14px;margin-bottom:22px}
-.masthead h1{
-  font-size:26px;font-weight:600;margin:0 0 4px;letter-spacing:-.012em;
-  text-wrap:balance;
-}
-.masthead .sub{color:var(--ink-2);max-width:66ch;margin:0}
-.stamp{
-  display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:10px;
-  font-size:11.5px;color:var(--ink-3);
-}
+.masthead{border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:20px;
+  display:flex;align-items:baseline;justify-content:space-between;gap:12px 20px;flex-wrap:wrap}
+.masthead h1{font-size:21px;font-weight:600;margin:0;letter-spacing:-.012em}
+.stamp{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:11.5px;color:var(--ink-3)}
 .stamp span{font-variant-numeric:tabular-nums}
+.cand{display:grid;grid-template-columns:minmax(140px,1fr) 110px 120px 62px;gap:12px;align-items:center;font-size:13px}
+.cand.hd{font-size:10.5px;letter-spacing:.05em;color:var(--ink-3);padding-bottom:6px;border-bottom:1px solid var(--rule)}
+.cand.row{padding:6px 0;border-bottom:1px solid var(--rule-soft)}
+.cand.row:last-child{border-bottom:0}
+.cand .r{text-align:right}
+.cand .lb{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cand button{padding:4px 11px;font-size:12px}
+.candwrap{min-width:470px}
 
 /* ---------- panels ---------- */
 .panel{background:var(--panel);border:1px solid var(--rule);box-shadow:var(--shadow);padding:18px 20px;margin-bottom:18px}
@@ -301,26 +303,42 @@ function dstr(d){ return d.getFullYear() + "-" + pad2(d.getMonth()+1) + "-" + pa
 
 function parseAccountId(raw) {
   var s = String(raw == null ? "" : raw).trim();
-  if (!s) return { error: "Enter a Dota 2 friend ID to run the report." };
+  if (!s) return { error: "Enter a Dota 2 friend ID, a Steam ID, or your Dota display name." };
 
-  if (/steamcommunity\.com\/id\//i.test(s)) {
-    return { error: "That is a custom Steam URL, and resolving it needs a Steam Web API key on a server, which this page deliberately does not have. Open your Dota 2 profile, read the friend ID under your name, and paste that number instead." };
-  }
+  var m;
 
-  var m = s.match(/(?:dotabuff\.com|opendota\.com|stratz\.com)\/(?:players|matches)\/(\d+)/i);
+  // Profile URLs that already carry a 32 bit account ID.
+  m = s.match(/(?:dotabuff\.com|opendota\.com|stratz\.com)\/(?:players|matches)\/(\d+)/i);
   if (m) return { id: Number(m[1]), how: "read from a profile URL" };
 
-  m = s.match(/steamcommunity\.com\/profiles\/(\d+)/i);
-  var digits = m ? m[1] : s.replace(/[^0-9]/g, "");
+  // A Steam custom URL carries a name, not a number. Search on the name.
+  m = s.match(/steamcommunity\.com\/id\/([^\/?#]+)/i);
+  if (m) {
+    var vanity = m[1];
+    try { vanity = decodeURIComponent(vanity); } catch (err) {}
+    return { name: vanity, how: "searched on the name in a Steam custom URL" };
+  }
 
-  if (!digits) return { error: "No digits found in that. Paste a friend ID, a 17 digit Steam ID, or a profile URL." };
-  if (digits.length > 20) return { error: "That number is too long to be a Steam or Dota account ID." };
+  // steamID3, [U:1:195286385]. The last field is the account ID outright.
+  m = s.match(/\[?U:1:(\d+)\]?/i);
+  if (m) return { id: Number(m[1]), how: "read from a steamID3" };
+
+  // Classic steamID, STEAM_0:1:97643192. account = Z * 2 + Y.
+  m = s.match(/STEAM_[0-5]:([01]):(\d+)/i);
+  if (m) return { id: Number(m[2]) * 2 + Number(m[1]), how: "converted from a classic steamID" };
+
+  m = s.match(/steamcommunity\.com\/profiles\/(\d+)/i);
+  var compact = m ? m[1] : s.replace(/[\s,]/g, "");
+
+  // Anything that is not purely digits by this point is treated as a display name.
+  if (!/^\d+$/.test(compact)) return { name: s, how: "searched by display name" };
+  if (compact.length > 20) return { error: "That number is too long to be a Steam or Dota account ID." };
 
   var big;
-  try { big = BigInt(digits); } catch (err) { return { error: "That is not a number this page can read." }; }
+  try { big = BigInt(compact); } catch (err) { return { error: "That is not a number this page can read." }; }
 
   // 17 digits, or anything at or above the Steam64 base, is a 64 bit Steam ID.
-  if (digits.length >= 17 || big >= STEAM64_BASE) {
+  if (compact.length >= 17 || big >= STEAM64_BASE) {
     if (big < STEAM64_BASE) return { error: "That looks like a 17 digit Steam ID but it is below the individual account range." };
     var conv = big - STEAM64_BASE;
     if (conv <= 0n || conv > 4294967295n) return { error: "Converting that Steam ID gave an account ID outside the valid 32 bit range." };
@@ -366,6 +384,24 @@ function matchesUrl(accountId, cap, days) {
   return API + "/players/" + accountId + "/matches?" + q.toString();
 }
 function heroesUrl() { return API + "/heroes"; }
+function searchUrl(name) { return API + "/search?q=" + encodeURIComponent(name); }
+function fetchSearch(name) { return getJSON(searchUrl(name)); }
+
+// OpenDota's search returns loose rows. Keep only what identifies an account,
+// and put accounts that have actually played recently at the top.
+function shapeCandidates(rows) {
+  if (!Array.isArray(rows)) return [];
+  return rows.filter(function (r) { return r && r.account_id != null; }).map(function (r) {
+    var t = r.last_match_time ? new Date(r.last_match_time) : null;
+    if (t && isNaN(t.getTime())) t = null;
+    return { account_id: r.account_id, name: r.personaname || "(no name)", last: t };
+  }).sort(function (a, b) {
+    if (!a.last && !b.last) return 0;
+    if (!a.last) return 1;
+    if (!b.last) return -1;
+    return b.last - a.last;
+  }).slice(0, 25);
+}
 function fetchMatches(accountId, cap, days) { return getJSON(matchesUrl(accountId, cap, days)); }
 function heroMap(rows) {
   var map = {};
@@ -934,6 +970,9 @@ function App() {
 
   var sm = React.useState(false), manual = sm[0], setManual = sm[1];
   var sn = React.useState(""), nameQuery = sn[0], setNameQuery = sn[1];
+  var sc = React.useState(null), candidates = sc[0], setCandidates = sc[1];
+  var ss = React.useState(""), searchText = ss[0], setSearchText = ss[1];
+  var si = React.useState(false), info = si[0], setInfo = si[1];
   var sh = React.useState(""), heroesText = sh[0], setHeroesText = sh[1];
   var st2 = React.useState(""), matchesText = st2[0], setMatchesText = st2[1];
 
@@ -1011,25 +1050,54 @@ function App() {
     return parsed;
   }
 
-  function run() {
-    var parsed = preflight();
-    if (!parsed) return;
-
-    setPhase("loading"); setProblem(null); setSaveNote(null);
+  function runWithId(accId, how) {
+    setPhase("loading"); setProblem(null); setSaveNote(null); setCandidates(null);
     var windowDef = currentWindow();
     var heroP = heroCache.current ? Promise.resolve(heroCache.current) : fetchHeroes();
 
     heroP.then(function (heroes) {
       heroCache.current = heroes;
-      return fetchMatches(parsed.id, cap, windowDef.days).then(function (rows) {
-        finish(rows, heroes, parsed.id, parsed.how, windowDef, "fetched live from OpenDota");
+      return fetchMatches(accId, cap, windowDef.days).then(function (rows) {
+        finish(rows, heroes, accId, how, windowDef, "fetched live from OpenDota");
       });
     }).catch(fail);
+  }
+
+  // A display name is not an account. Resolve it against OpenDota's index and
+  // let the user pick, rather than guessing which match is them.
+  function resolveName(name) {
+    setPhase("loading"); setProblem(null); setCandidates(null); setSaveNote(null);
+    fetchSearch(name).then(function (rows) {
+      setPhase("idle");
+      var list = shapeCandidates(rows);
+      if (!list.length) {
+        setProblem({ kind: "api", title: "No public account under that name",
+          body: ["OpenDota knows no public account called " + name + ". Either the name is spelled differently in Dota 2 than you typed it, or this account has never had a match attributed to it, which happens when Expose Public Match Data is switched off inside Dota 2 under Settings, Options, Advanced Options. That setting is separate from your Steam profile privacy and it is off by default."] });
+        return;
+      }
+      setCandidates(list);
+    }).catch(function (err) {
+      setPhase("idle");
+      if (err && err.kind === "network") { setManual(true); setNameQuery(name); }
+      fail(err);
+    });
+  }
+
+  function run() {
+    var parsed = preflight();
+    if (!parsed) return;
+    if (parsed.name) { resolveName(parsed.name); return; }
+    runWithId(parsed.id, parsed.how);
   }
 
   function runPasted() {
     var parsed = preflight();
     if (!parsed) return;
+    if (parsed.name) {
+      setProblem({ kind: "input", title: "That is a name, not an account number",
+        body: ["The field at the top of the page holds " + parsed.name + ", which is a display name. Match data is fetched by account number. Use the name lookup below to find yours, then put that number in the field and paste the match data for it."] });
+      return;
+    }
 
     var heroes = {};
     var ht = heroesText.trim();
@@ -1066,33 +1134,25 @@ function App() {
 
   function onKey(ev) { if (ev.key === "Enter") run(); }
 
-  /* --- control panel --- */
+  /* --- control panel: controls only, no prose --- */
   var controls = div({ className: "panel" },
-    h2_(null, "Control panel"),
-    p_({ className: "hint" }, "Nothing is stored and nothing leaves your browser except the two requests to OpenDota's public API. There is no login, because reading public match history does not need one."),
-
     div({ className: "fieldgrid" },
       div({ className: "field", style: { gridColumn: "span 2", minWidth: 0 } },
-        label({ htmlFor: "acct" }, "Dota 2 friend ID"),
+        label({ htmlFor: "acct" }, "Friend ID, Steam ID, or Dota name"),
         input({
           id: "acct", type: "text", value: idText, onChange: function (ev) { setIdText(ev.target.value); },
-          onKeyDown: onKey, placeholder: "e.g. 86745912", autoComplete: "off", spellCheck: false,
-          "aria-describedby": "acct-note"
-        }),
-        span({ className: "note", id: "acct-note" },
-          "Also accepts a 17 digit Steam ID, or a pasted steamcommunity.com/profiles, Dotabuff or OpenDota profile URL. A steamcommunity.com/id/yourname link cannot be resolved here, so use the friend ID shown on your Dota 2 profile instead.")
+          onKeyDown: onKey, placeholder: "195286385, or bijson", autoComplete: "off", spellCheck: false
+        })
       ),
       div({ className: "field" },
         label({ htmlFor: "win" }, "Time window"),
         select({ id: "win", value: win, onChange: function (ev) { setWin(ev.target.value); } },
-          WINDOWS.map(function (w) { return option({ key: w.id, value: w.id }, w.label); })),
-        span({ className: "note" }, "Filtered on match start time, twice: once at the API and once here.")
+          WINDOWS.map(function (w) { return option({ key: w.id, value: w.id }, w.label); }))
       ),
       div({ className: "field" },
         label({ htmlFor: "cap" }, "Maximum matches"),
         select({ id: "cap", value: String(cap), onChange: function (ev) { setCap(Number(ev.target.value)); } },
-          CAPS.map(function (c) { return option({ key: c, value: String(c) }, String(c)); })),
-        span({ className: "note" }, "A hard ceiling on the request. The window above is the real control.")
+          CAPS.map(function (c) { return option({ key: c, value: String(c) }, String(c)); }))
       )
     ),
 
@@ -1124,7 +1184,7 @@ function App() {
 
     div({ className: "toolbar" },
       button({ type: "button", onClick: run, disabled: phase === "loading" },
-        phase === "loading" ? "Reading match history…" : "Generate report"),
+        phase === "loading" ? "Reading…" : "Generate report"),
       button({ className: "ghost", type: "button", onClick: function () { setManual(!manual); } },
         manual ? "Hide the paste path" : "Paste data instead"),
       R && saveMode !== "none"
@@ -1133,23 +1193,46 @@ function App() {
             saveMode === "pending" ? "Preparing export…" : "Export workbook")
         : null,
       R && saveMode === "none"
-        ? span({ className: "status" }, "This view will not let the page hand you a file, so the workbook export is hidden. The copy in the repository, opened directly in a browser, exports normally.")
+        ? span({ className: "status" }, "This view cannot hand you a file. The repository copy exports normally.")
         : null,
-      saveNote ? span({ className: "status" }, saveNote) : null,
-      phase === "loading" ? span({ className: "status" }, "Two calls to OpenDota, then everything is computed locally.") : null
+      saveNote ? span({ className: "status" }, saveNote) : null
     )
   );
 
+  /* --- account picker, from a live search or a pasted one --- */
+  function pick(c) { setIdText(String(c.account_id)); setCandidates(null); runWithId(c.account_id, "chosen from a name search"); }
+
+  var candPanel = (candidates && candidates.length) ? div({ className: "panel" },
+    h2_(null, "Which account is you?"),
+    p_({ className: "hint" }, candidates.length + " public account" + (candidates.length === 1 ? "" : "s") + " under that name, most recently active first."),
+    div({ className: "scroller" },
+      div({ className: "candwrap" },
+        div({ className: "cand hd" },
+          div(null, "Name"), div({ className: "r" }, "Account ID"), div({ className: "r" }, "Last match"), div(null, "")),
+        candidates.map(function (c) {
+          return div({ className: "cand row", key: c.account_id },
+            div({ className: "lb", title: c.name }, c.name),
+            div({ className: "r num" }, c.account_id),
+            div({ className: "r num" }, c.last ? dstr(c.last) : "never"),
+            div(null, button({ className: "ghost", type: "button", onClick: function () { pick(c); } }, "Use"))
+          );
+        })
+      )
+    )
+  ) : null;
+
   /* --- paste path, for viewers that block the page's own requests --- */
   var pid = parseAccountId(idText);
-  var mUrl = pid.error ? null : matchesUrl(pid.id, cap, currentWindow().days);
+  var pidOk = !pid.error && pid.id != null;
+  var mUrl = pidOk ? matchesUrl(pid.id, cap, currentWindow().days) : null;
+  var nq = (nameQuery || (pid.name || "")).trim();
 
   function urlStep(n, heading, url, note, value, onChange, placeholder) {
     return div({ className: "step" },
       p_({ className: "n" }, n + ". " + heading),
       div({ className: "urlbox" },
         url ? React.createElement("a", { href: url, target: "_blank", rel: "noopener noreferrer" }, url)
-            : "Enter a valid account ID above and this URL will appear here."),
+            : "Put a valid account number in the field above and this URL will appear."),
       p_({ className: "hint", style: { margin: "0 0 7px" } }, note),
       React.createElement("textarea", {
         value: value, onChange: function (ev) { onChange(ev.target.value); },
@@ -1158,66 +1241,82 @@ function App() {
     );
   }
 
+  function readSearch() {
+    try {
+      var rows = JSON.parse(searchText);
+      var list = shapeCandidates(rows);
+      if (!list.length) { setProblem({ kind: "input", title: "No accounts in that response", body: ["That JSON parsed but contained no account_id fields. Copy the whole response from the search URL."] }); return; }
+      setProblem(null); setCandidates(list);
+    } catch (err) {
+      setProblem({ kind: "input", title: "Search result did not parse", body: ["Paste the entire JSON response from the search URL, opening bracket to closing bracket."] });
+    }
+  }
+
   var pastePanel = manual ? div({ className: "panel" },
     h2_(null, "Load data by hand"),
     p_({ className: "hint" },
-      "A published page is not allowed to make its own outbound requests, so the automatic fetch cannot work when this is opened as a hosted link. Nothing is wrong with your ID or your privacy settings. Fetch the two responses yourself and paste them in, and every calculation runs exactly as it would have. The repository copy, opened as a local file, fetches automatically and needs none of this."),
+      "A published page is not allowed to make its own outbound requests, so the automatic fetch cannot work on a hosted link. Fetch the responses yourself and paste them in; every calculation runs identically. The repository copy, opened as a local file, fetches automatically and needs none of this."),
     hr({ className: "divider" }),
-    urlStep(1, "Hero names, optional but recommended", heroesUrl(),
-      "Open the link, select everything, copy, paste below. Leave this empty and heroes are labelled by numeric ID instead of by name. The list rarely changes, so one copy lasts you months.",
-      heroesText, setHeroesText, "[{\"id\":1,\"name\":\"npc_dota_hero_antimage\",\"localized_name\":\"Anti-Mage\", ... }]"),
-    urlStep(2, "Your match history, required", mUrl,
-      "This URL already carries your time window, match cap and the extra fields the report needs. Open it, select everything, copy, paste below. On a large window the response is long; copy all of it.",
-      matchesText, setMatchesText, "[{\"match_id\":8123456789,\"player_slot\":2,\"radiant_win\":true, ... }]"),
-    div({ className: "toolbar" },
-      button({ type: "button", onClick: runPasted, disabled: !matchesText.trim() }, "Run from pasted data"),
-      button({ className: "ghost", type: "button", onClick: function () { setMatchesText(""); setHeroesText(""); } }, "Clear boxes")
-    ),
-    pid.error ? null : div(null,
-      hr({ className: "divider" }),
-      p_({ className: "n", style: { fontSize: "12px", fontWeight: 600, color: "var(--ink-2)", margin: "0 0 5px" } }, "If step 2 returns an empty pair of brackets"),
-      p_({ className: "hint" },
-        "That is a real answer from OpenDota meaning nothing matched, not a broken request. Work through these three checks in order rather than guessing."),
-      p_({ className: "hint", style: { fontWeight: 500, color: "var(--ink)" } }, "Check 1. Is it just the time window?"),
-      div({ className: "urlbox" },
-        React.createElement("a", { href: API + "/players/" + pid.id + "/matches?limit=20", target: "_blank", rel: "noopener noreferrer" },
-          API + "/players/" + pid.id + "/matches?limit=20")),
-      p_({ className: "hint" }, "No date filter, any twenty matches ever. Matches here means your history is fine and you simply have not played inside the window you chose, so set Time window to All history. Empty here rules the window out, go on."),
-      p_({ className: "hint", style: { fontWeight: 500, color: "var(--ink)" } }, "Check 2. Does OpenDota know this account at all?"),
-      div({ className: "urlbox" },
-        React.createElement("a", { href: API + "/players/" + pid.id, target: "_blank", rel: "noopener noreferrer" },
-          API + "/players/" + pid.id)),
-      p_({ className: "hint" }, "A Not Found here means OpenDota holds no record for this account number. That has two causes which look identical from outside, a wrong account number or a Dota 2 account that has never opted in, so it does not on its own tell you which. Check 3 separates them."),
-      p_({ className: "hint", style: { fontWeight: 500, color: "var(--ink)" } }, "Check 3. Is the account number even right? Search by your Dota name."),
+
+    div({ className: "step" },
+      p_({ className: "n" }, "0. Find your account number, if you only know your name"),
       div({ className: "field", style: { marginBottom: "7px" } },
         input({ type: "text", value: nameQuery, onChange: function (ev) { setNameQuery(ev.target.value); },
                 placeholder: "Your Dota 2 display name", autoComplete: "off", spellCheck: false, "aria-label": "Dota 2 display name" })),
-      nameQuery.trim() ? div({ className: "urlbox" },
-        React.createElement("a", { href: API + "/search?q=" + encodeURIComponent(nameQuery.trim()), target: "_blank", rel: "noopener noreferrer" },
-          API + "/search?q=" + encodeURIComponent(nameQuery.trim()))) : null,
-      p_({ className: "hint", style: { marginBottom: 0 } },
-        "This returns every public account OpenDota knows under that name, each with its account_id, personaname and last_match_time. Find yourself by the name and the most recent last_match_time, and that account_id is the number to put in the field at the top of this page. If it differs from what you entered, the account number was the fault, not your privacy setting. If your name returns nothing at all, OpenDota has never been allowed to attribute a match to you, and Expose Public Match Data inside Dota 2 under Settings, Options, Advanced Options is the thing to turn on. Note that this is a different setting from your Steam profile privacy, it lives inside the game, and it is off by default.")
-    )
+      nq ? div({ className: "urlbox" },
+        React.createElement("a", { href: searchUrl(nq), target: "_blank", rel: "noopener noreferrer" }, searchUrl(nq))) : null,
+      p_({ className: "hint", style: { margin: "0 0 7px" } },
+        "Open it, copy the response, paste it here and press Show accounts. Every public account under that name appears with its number and last match date. Nothing at all means OpenDota has never been allowed to attribute a match to you, which is the Expose Public Match Data setting inside Dota 2 under Settings, Options, Advanced Options, not your Steam profile privacy."),
+      React.createElement("textarea", { value: searchText, onChange: function (ev) { setSearchText(ev.target.value); },
+        placeholder: '[{"account_id":195286385,"personaname":"bijson","last_match_time":"2026-09-01T18:22:05.000Z"}]',
+        spellCheck: false, "aria-label": "Search results JSON" }),
+      div({ className: "toolbar", style: { marginTop: "10px" } },
+        button({ className: "ghost", type: "button", disabled: !searchText.trim(), onClick: readSearch }, "Show accounts"))
+    ),
+
+    urlStep(1, "Hero names, optional", heroesUrl(),
+      "Leave empty and heroes are labelled by number instead of name. The list rarely changes, so one copy lasts months.",
+      heroesText, setHeroesText, '[{"id":1,"localized_name":"Anti-Mage"}]'),
+    urlStep(2, "Your match history, required", mUrl,
+      "This URL already carries your window, cap and the extra fields the report needs.",
+      matchesText, setMatchesText, '[{"match_id":8123456789,"player_slot":2,"radiant_win":true}]'),
+
+    div({ className: "toolbar" },
+      button({ type: "button", onClick: runPasted, disabled: !matchesText.trim() }, "Run from pasted data"),
+      button({ className: "ghost", type: "button", onClick: function () { setMatchesText(""); setHeroesText(""); setSearchText(""); } }, "Clear boxes")
+    ),
+
+    pidOk ? div(null,
+      hr({ className: "divider" }),
+      p_({ className: "n" }, "If step 2 returns an empty pair of brackets"),
+      p_({ className: "hint" }, "Open this. No date filter, any twenty matches ever. Matches here means you simply have not played inside the window you chose, so set Time window to All history. Empty here too means the account number is wrong or the account has never opted in, and step 0 tells you which."),
+      div({ className: "urlbox", style: { marginBottom: 0 } },
+        React.createElement("a", { href: API + "/players/" + pid.id + "/matches?limit=20", target: "_blank", rel: "noopener noreferrer" },
+          API + "/players/" + pid.id + "/matches?limit=20"))
+    ) : null
   ) : null;
 
-  /* --- method panel, shown before a run --- */
-  var method = div({ className: "panel method" },
-    h2_(null, "How this measures"),
-    p_({ className: "hint" }, "The instrument treats your overall win rate across all the matches that passed your filters as the datum, then asks whether any split sits far enough off that line to be distinguishable from noise."),
+  /* --- everything explanatory lives here, behind one toggle --- */
+  var infoPanel = info ? div({ className: "panel method" },
+    h2_(null, "Method and definitions"),
+    p_({ className: "hint" },
+      "An instrument, not a coach. It reads every match in a public OpenDota history inside the window you set, takes that player's own win rate as the datum, and reports which conditions sit far enough off that line to be worth believing."),
     dl(null,
-      dt(null, "Datum"), dd(null, "Your own win rate across every match that passed the filters. Not 50%, and not anybody else's."),
-      dt(null, "Coverage"), dd(null, "Every match OpenDota returns inside your window is used. Nothing is sampled, subsampled, averaged away or thrown out, other than the exclusions listed on this page, and the run record at the foot of every report states exactly how many matches were dropped and why."),
-      dt(null, "Categorical splits"), dd(null, "Standard error on the proportion, the square root of p times one minus p divided by the bucket size, with p the datum. The reported sigma is how many of those standard errors the bucket sits from the line."),
-      dt(null, "Suppression"), dd(null, "Below " + SIGMA_CAT + " sigma, or below " + MIN_BUCKET + " games, no finding is written. The bucket still appears in the table, muted, so you can see it was measured."),
+      dt(null, "The ID field"), dd(null, "Takes a 32 bit friend ID, a 17 bit Steam ID, a steamID3 like [U:1:195286385], a classic STEAM_0:1:97643192, a Steam, Dotabuff, OpenDota or Stratz profile URL, or simply a Dota 2 display name, which is looked up and offered as a list to choose from."),
+      dt(null, "Datum"), dd(null, "The player's own win rate across every match that passed the filters. Not 50%, and not anybody else's."),
+      dt(null, "Coverage"), dd(null, "Every match OpenDota returns inside the window is used. Nothing is sampled, subsampled, averaged away or thrown out beyond the exclusions listed here, and the run record at the foot of each report states how many were dropped and why."),
+      dt(null, "Categorical splits"), dd(null, "Standard error on the proportion, the square root of p times one minus p divided by the bucket size, with p the datum. Sigma is how many of those standard errors the bucket sits from the line."),
+      dt(null, "Suppression"), dd(null, "Below " + SIGMA_CAT + " sigma, or below " + MIN_BUCKET + " games, no finding is written. The bucket still appears, muted, so you can see it was measured."),
       dt(null, "Wins against losses"), dd(null, "Welch's comparison, two populations with different variances and different sizes. A finding needs " + SIGMA_WELCH + " sigma."),
       dt(null, "Abandons"), dd(null, "Any match under five minutes is discarded before anything is counted."),
       dt(null, "Sessions"), dd(null, "Measured end of one match to start of the next. A gap over three hours opens a new session."),
-      dt(null, "Missing fields"), dd(null, "OpenDota only fills lane role and some detail on parsed matches, which is a minority. Nothing is inferred to fill a gap. Unmeasured is reported as unmeasured.")
+      dt(null, "Missing fields"), dd(null, "OpenDota fills lane role and some detail only on parsed matches, which are a minority, and often returns a null party size. Nothing is inferred to fill a gap. Unmeasured is reported as unmeasured."),
+      dt(null, "Privacy"), dd(null, "Nothing is stored, and nothing leaves the browser except requests to OpenDota's public API. There is no login, because reading public match history does not need one.")
     ),
     p_({ className: "hint", style: { marginTop: "14px", marginBottom: 0 } },
-      "One honest limit worth stating up front, and it is not about how much data is used, because all of it is. It is that these matches were never assigned to conditions the way a controlled experiment assigns them. You chose when to play, which hero to pick and when to stop, so a bucket can move for reasons the bucket itself does not name. A split clearing " + SIGMA_CAT +
-      " sigma has cleared a low bar, and running thirteen analyses over the same matches means roughly one bucket in fifteen clears it by chance alone. Treat a finding as a hypothesis to test against your next hundred games, not a conclusion.")
-  );
+      "One honest limit, and it is not about how much data is used, because all of it is. These matches were never assigned to conditions the way a controlled experiment assigns them. You chose when to play, which hero to pick and when to stop, so a bucket can move for reasons the bucket itself does not name. A split clearing " + SIGMA_CAT +
+      " sigma has cleared a low bar, and running thirteen analyses over the same matches means roughly one bucket in fifteen clears it by chance alone. Treat a finding as a hypothesis to test against the next hundred games, not a conclusion.")
+  ) : null;
 
   /* --- problem messages --- */
   var msg = problem ? div({ className: "msg " + (problem.kind === "input" ? "warn" : "err") },
@@ -1228,17 +1327,15 @@ function App() {
   return div(null,
     div({ className: "masthead" },
       React.createElement("h1", null, "Dota deviation report"),
-      p_({ className: "sub" }, "An instrument, not a coach. It reads every match in your public OpenDota history inside the window you set, takes your own win rate as the datum, and reports which conditions sit far enough off that line to be worth believing."),
       div({ className: "stamp" },
-        span(null, "Source: OpenDota public API"),
-        span(null, "Datum: player baseline"),
-        span(null, "Categorical floor: " + SIGMA_CAT.toFixed(1) + " σ"),
-        span(null, "Welch floor: " + SIGMA_WELCH.toFixed(1) + " σ"),
-        span(null, "Minimum bucket: " + MIN_BUCKET + " games")
-      )
+        span(null, "Datum " + SIGMA_CAT.toFixed(1) + " σ / Welch " + SIGMA_WELCH.toFixed(1) + " σ / min " + MIN_BUCKET + " games"),
+        button({ className: "link", type: "button", onClick: function () { setInfo(!info); } },
+          info ? "Hide method" : "Method and definitions"))
     ),
     msg,
     controls,
+    infoPanel,
+    candPanel,
     pastePanel,
     R ? div({ className: "reveal", key: R.accountId + "-" + R.n },
           e(Readout, { R: R }),
@@ -1257,7 +1354,7 @@ function App() {
               R.dropped.turbo + " Turbo, " + R.dropped.unranked + " not ranked, " + R.dropped.malformed + " missing required fields.")
           )
         )
-      : method
+      : null
   );
 }
 
