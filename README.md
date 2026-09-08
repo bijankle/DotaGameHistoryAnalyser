@@ -7,6 +7,34 @@ question as an instrumentation problem rather than a coaching one.
 Open `index.html` in any browser. There is no build step, no server, no login and
 no API key. React and SheetJS load from a CDN; everything else is in the file.
 
+## Running it so that it fetches automatically
+
+The tool needs to make two requests to OpenDota. Where it can, it does that on its
+own and you never see it. Where it cannot, it falls back to a paste path that gets
+you the same report by hand.
+
+| How you open it | Fetches automatically |
+|---|---|
+| GitHub Pages | Yes |
+| Local file, `index.html` opened directly | Yes |
+| Local web server, e.g. `python3 -m http.server` | Yes |
+| Published Claude artifact | No, the viewer forbids a page from making its own requests |
+
+GitHub Pages is the easiest way to get an automatic version you can open from any
+machine, including a phone. In the repository go to Settings, then Pages, set
+Source to "Deploy from a branch", Branch to `main`, folder to `/ (root)`, and Save.
+About a minute later it is live at
+`https://<your-username>.github.io/DotaGameHistoryAnalyser/` and everything works
+without pasting anything.
+
+## Known slow endpoint
+
+Looking an account up by display name uses OpenDota's `/search`, which scans a very
+large table and times out reasonably often. The tool gives up on it after thirty
+seconds rather than hanging, and tells you to use your numeric friend ID instead,
+which goes to a different and much faster endpoint. A search timeout says nothing
+about whether your account or your data is fine.
+
 ## What it measures
 
 The player's own win rate across the filtered sample is the datum. Every analysis

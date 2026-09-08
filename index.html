@@ -354,8 +354,16 @@ function parseAccountId(raw) {
 function ApiError(kind, message, title){ this.kind = kind; this.message = message; this.title = title || null; }
 ApiError.prototype = Object.create(Error.prototype);
 
-function getJSON(url) {
-  return fetch(url, { headers: { "Accept": "application/json" } }).then(function (res) {
+function getJSON(url, timeoutMs) {
+  var limit = timeoutMs || 60000;
+  var ctl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+  var timer = null;
+  var opts = { headers: { "Accept": "application/json" } };
+  if (ctl) { opts.signal = ctl.signal; timer = setTimeout(function () { ctl.abort(); }, limit); }
+  function done() { if (timer) { clearTimeout(timer); timer = null; } }
+
+  return fetch(url, opts).then(function (res) {
+    done();
     if (res.status === 404) throw new ApiError("notfound",
       "OpenDota returned 404 for that account ID. The ID is wrong. Check the friend ID shown on your Dota 2 profile, and note that the friend ID is not the same number as your 17 digit Steam ID.");
     if (res.status === 429) throw new ApiError("rate",
@@ -364,7 +372,12 @@ function getJSON(url) {
       "OpenDota returned a " + res.status + ". That is their server, not your ID or this page. Try again shortly.");
     if (!res.ok) throw new ApiError("http", "OpenDota returned HTTP " + res.status + ".");
     return res.json();
-  }, function () {
+  }, function (err) {
+    done();
+    if (err && (err.name === "AbortError" || err.code === 20)) {
+      throw new ApiError("timeout",
+        "OpenDota did not answer within " + Math.round(limit / 1000) + " seconds, so the request was given up on rather than left hanging. Their API is free and unmetered and does go slow under load. Wait a minute and try again.");
+    }
     throw new ApiError("network",
       "The request to OpenDota did not complete. If you are reading this as a published page, that is expected and permanent: the viewer blocks a page from making its own outbound requests, so the automatic fetch can never work here. Use the paste path opened below instead, which needs no network access from this page at all. If you are running the file locally, then this is an ordinary dropped connection, an offline machine, or an extension blocking the request.");
   });
@@ -385,7 +398,7 @@ function matchesUrl(accountId, cap, days) {
 }
 function heroesUrl() { return API + "/heroes"; }
 function searchUrl(name) { return API + "/search?q=" + encodeURIComponent(name); }
-function fetchSearch(name) { return getJSON(searchUrl(name)); }
+function fetchSearch(name) { return getJSON(searchUrl(name), 30000); }
 
 // OpenDota's search returns loose rows. Keep only what identifies an account,
 // and put accounts that have actually played recently at the top.
@@ -998,6 +1011,7 @@ function App() {
            : err && err.kind === "thin" ? "Sample too small to analyse"
            : err && err.kind === "notfound" ? "Account not found"
            : err && err.kind === "rate" ? "Rate limited by OpenDota"
+           : err && err.kind === "timeout" ? "OpenDota did not answer in time"
            : err && err.kind === "network" ? "This page cannot call OpenDota itself"
            : "Could not complete the request",
       body: [err && err.message ? err.message : "An unexpected error stopped the run."]
@@ -1079,6 +1093,13 @@ function App() {
     }).catch(function (err) {
       setPhase("idle");
       if (err && err.kind === "network") { setManual(true); setNameQuery(name); }
+      if (err && err.kind === "timeout") {
+        setProblem({ kind: "api", title: "OpenDota's name search timed out",
+          body: ["The name search scans a very large table and is by some distance the slowest and least reliable endpoint OpenDota offers. A timeout there says nothing about your account.",
+                 "Do not wait on it. Put your numeric friend ID in the field instead, which uses a completely different and much faster endpoint. You will find that number on your own Dota 2 profile page, shown under your name.",
+                 "If you do not know it and the search will not answer, https://www.dotabuff.com/search?q=" + encodeURIComponent(name) + " indexes the same accounts and the number appears in the URL of your profile there."] });
+        return;
+      }
       fail(err);
     });
   }
