@@ -120,23 +120,23 @@ button.link{background:none;border:none;color:var(--blue);padding:0;text-decorat
 .headline{background:var(--panel-2);border:1px solid var(--rule);border-top:2px solid var(--blue);padding:16px 20px;margin-bottom:18px}
 .headline h2{font-size:14px;font-weight:600;margin:0 0 10px}
 .fl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
-.fl li{display:grid;grid-template-columns:58px 1fr;gap:12px;align-items:baseline;font-size:13.2px}
-.fl .sg{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;font-size:12.5px;font-weight:500;text-align:right}
+.fl li{display:grid;grid-template-columns:13px 1fr;gap:10px;align-items:baseline;font-size:13.4px}
+.fl .sg{font-size:9px;line-height:1.75}
 .sg.up{color:var(--green)} .sg.dn{color:var(--red)}
 .fl .src{color:var(--ink-3);font-size:11.5px}
 
 /* ---------- analysis blocks ---------- */
-.block{background:var(--panel-2);border:1px solid var(--rule);padding:16px 20px 18px;margin-bottom:16px}
+.block{background:var(--panel-2);border:1px solid var(--rule);padding:14px 18px 16px;margin-bottom:12px}
 .block > header{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;justify-content:space-between;margin-bottom:2px}
 .block h3{font-size:14.5px;font-weight:600;margin:0}
 .block .meta{font-size:11.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
-.block .desc{font-size:12.5px;color:var(--ink-2);margin:0 0 14px;max-width:78ch}
+.block > header{margin-bottom:8px}
 
 .scroller{overflow-x:auto}
-.dev{min-width:560px}
+.dev{min-width:470px}
 .dev .hd,.dev .row{
   display:grid;
-  grid-template-columns:minmax(120px,1.35fr) 46px 62px minmax(150px,2.1fr) 58px;
+  grid-template-columns:minmax(120px,1.4fr) 44px 58px minmax(160px,2.2fr);
   gap:12px;align-items:center;
 }
 .dev .hd{font-size:10.5px;letter-spacing:.05em;color:var(--ink-3);padding-bottom:6px;border-bottom:1px solid var(--rule)}
@@ -180,7 +180,7 @@ button.link{background:none;border:none;color:var(--blue);padding:0;text-decorat
   .masthead h1{font-size:22px}
   .readout{padding:14px 16px}
   .panel,.block,.headline{padding-left:15px;padding-right:15px}
-  .fl li{grid-template-columns:52px 1fr;gap:9px}
+  .fl li{grid-template-columns:13px 1fr;gap:9px}
   .method dl{grid-template-columns:1fr;gap:2px 0}
   .method dd{margin-bottom:8px}
 }
@@ -293,8 +293,7 @@ function bool(v){
   if (v === 0 || v === "0" || v === "false" || v === "False") return false;
   return null;
 }
-function pct(x, dp){ return (x*100).toFixed(dp === undefined ? 1 : dp) + "%"; }
-function sig(x, dp){ var d = dp === undefined ? 2 : dp; return (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(d); }
+function pct(x, dp){ return (x*100).toFixed(dp === undefined ? 0 : dp) + "%"; }
 function fmt(x, dp){ return x === null || x === undefined || !isFinite(x) ? "—" : x.toFixed(dp); }
 function clamp(v,a,b){ return v < a ? a : v > b ? b : v; }
 function pad2(n){ return (n<10?"0":"") + n; }
@@ -608,6 +607,10 @@ function metricSplit(list, keyFn, valFn) {
   var ss = 0;
   for (i = 0; i < vals.length; i++) { var d = vals[i] - datum; ss += d * d; }
   var sd = Math.sqrt(ss / (vals.length - 1));
+  // Guard a degenerate spread. If every value is effectively identical, the
+  // deltas and the standard error are both rounding dust and their ratio is
+  // meaningless, so refuse to report anything rather than divide noise by noise.
+  if (!(sd > Math.max(Math.abs(datum), 1) * 1e-9)) sd = 0;
 
   var rows = Object.keys(byKey).map(function (k) {
     var a = byKey[k], s = 0, j;
@@ -621,16 +624,30 @@ function metricSplit(list, keyFn, valFn) {
   return { datum: datum, sd: sd, rows: rows, covered: vals.length, total: list.length };
 }
 
-function metricFindings(rows, datum, unit, dp) {
+function metricFindings(rows, datum, more, less, dp) {
   return rows.filter(function (r) { return r.eligible && Math.abs(r.sigma) >= SIGMA_CAT; })
     .sort(function (a, b) { return Math.abs(b.sigma) - Math.abs(a.sigma); })
     .map(function (r) {
       return { sigma: r.sigma, key: r.key,
-        text: r.key + " averages " + r.mean.toFixed(dp || 0) + " " + unit + " over " + r.n + " games, " +
-              Math.abs(r.sigma).toFixed(2) + " standard errors " + (r.sigma > 0 ? "above" : "below") +
-              " your overall " + datum.toFixed(dp || 0) + "." };
+        text: (r.sigma > 0 ? more : less) + " on " + r.key + ": " + r.mean.toFixed(dp || 0) +
+              " against your usual " + datum.toFixed(dp || 0) + ", from " + r.n + " games" };
     });
 }
+
+// How each split reads in a sentence, so findings can be written in English
+// rather than as a bucket label bolted onto a number.
+var PHRASE = {
+  hero:    function (k) { return "playing " + k; },
+  length:  function (k) { return "when games run " + k.toLowerCase(); },
+  tod:     function (k) { return "starting between " + k; },
+  dow:     function (k) { return "on " + k + "s"; },
+  session: function (k) { return "on the " + k.toLowerCase() + " of a session"; },
+  tilt:    function (k) { return k.toLowerCase(); },
+  side:    function (k) { return "playing " + k; },
+  party:   function (k) { return k === "Solo" ? "playing solo" : "playing in a " + k.toLowerCase(); },
+  lane:    function (k) { return "in the " + k.toLowerCase(); },
+  month:   function (k) { return "in " + k; }
+};
 
 var TOP_HEROES = 3;
 
@@ -687,9 +704,8 @@ function itemAnalysis(list, itemNames) {
         }).sort(function (a, b) { return Math.abs(b.sigma) - Math.abs(a.sigma); })
         .map(function (r) {
           return { sigma: r.sigma, key: r.key,
-            text: "On " + h + ", games ending with " + r.key + " ran at " + pct(r.rate) + " over " + r.n +
-                  " of " + withItems.length + ", " + Math.abs(r.sigma).toFixed(2) + " standard errors " +
-                  (r.sigma > 0 ? "above" : "below") + " that hero's " + pct(baseline) + "." };
+            text: (r.sigma > 0 ? "Better" : "Worse") + " with " + r.key + " on " + h + ": " + pct(r.rate) +
+                  " against " + pct(baseline) + " on that hero, from " + r.n + " games" };
         })
     };
   });
@@ -703,7 +719,7 @@ var TOD_ORDER = [];
 for (var _h = 0; _h < 24; _h += 3) TOD_ORDER.push(pad2(_h) + ":00 to " + pad2(_h+2) + ":59");
 var DOW_ORDER = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 var LEN_ORDER = ["Under 25 min","25 to 35 min","35 to 45 min","Over 45 min"];
-var POS_ORDER = ["1st of session","2nd","3rd","4th","5th","6th or later"];
+var POS_ORDER = ["1st game","2nd game","3rd game","4th game","5th game","6th game or later"];
 var TILT_ORDER = ["First of session","After a win","After a loss","After 2+ losses"];
 var PARTY_ORDER = ["Solo","Party of 2","Party of 3","Party of 4","Party of 5","Unknown"];
 var LANE_ORDER = ["Safe lane","Mid lane","Off lane","Jungle","Unparsed"];
@@ -733,7 +749,7 @@ function buildBlocks(list, baseline, picked, itemNames) {
       id:id, name:meta.name, desc:meta.desc, sheet:meta.sheet, kind:"cat",
       rows:rows, shown:shown, hidden:hidden, hiddenGames:hiddenGames,
       noFinding:noFinding || [],
-      findings:catFindings(rows, baseline, noFinding || [])
+      findings:catFindings(rows, baseline, noFinding || [], id)
     });
   }
 
@@ -764,9 +780,9 @@ function buildBlocks(list, baseline, picked, itemNames) {
   if (picked.month)   cat("month",   monthKey, function(a,b){ return b.key.localeCompare(a.key); });
 
   [
-    { id:"herodmg", field:"hd_per_min", unit:"hero damage per minute", dp:0,
+    { id:"herodmg", field:"hd_per_min", unit:"hero damage per minute", dp:0, more:"More damage", less:"Less damage",
       caveat:"This ranks heroes, not your play. Damage per minute is set mostly by what a hero does: a mid laner out damages a hard support by construction, and a pusher trades hero damage for buildings. It is worth reading when a hero sits far from where its role would put it, or when two heroes you treat as the same job separate. It is not worth reading as a measure of how well you played." },
-    { id:"herokda", field:"kda", unit:"weighted KDA", dp:2,
+    { id:"herokda", field:"kda", unit:"weighted KDA", dp:2, more:"Better trades", less:"Worse trades",
       caveat:"Two things to hold in mind. Deaths are floored at one, so a deathless game reads as its own kill contribution rather than infinity, which flatters low death games slightly. And this is the mean of each game's ratio, not the ratio of your totals, so a single quiet game with one death moves a hero further than its share of the fighting deserves. Read it as a ranking of how you tend to trade on each hero, not as a precise rate." }
   ].forEach(function (spec) {
     if (!picked[spec.id]) return;
@@ -781,26 +797,30 @@ function buildBlocks(list, baseline, picked, itemNames) {
       unit:spec.unit, dp:spec.dp, caveat:spec.caveat, datum:sp.datum, sd:sp.sd,
       covered:sp.covered, total:sp.total,
       rows:sp.rows, shown:shownM, hidden:hiddenM, hiddenGames:hiddenGamesM, noFinding:[],
-      findings: sp.datum === null ? [] : metricFindings(sp.rows, sp.datum, spec.unit, spec.dp)
+      findings: sp.datum === null ? [] : metricFindings(sp.rows, sp.datum, spec.more, spec.less, spec.dp)
     });
   });
 
   return out;
 }
 
-function catFindings(rows, baseline, noFinding) {
+function catFindings(rows, baseline, noFinding, id) {
+  var say = PHRASE[id] || function (k) { return k; };
   var hits = rows.filter(function (r) {
     return r.eligible && noFinding.indexOf(r.key) < 0 && Math.abs(r.sigma) >= SIGMA_CAT;
-  }).sort(function (a,b) { return Math.abs(b.sigma) - Math.abs(a.sigma); });
-
-  return hits.map(function (r) {
-    return {
-      sigma: r.sigma, key: r.key,
-      text: r.key + " runs at " + pct(r.rate) + " over " + r.n + " games, " +
-            Math.abs(r.sigma).toFixed(2) + " standard errors " + (r.sigma > 0 ? "above" : "below") +
-            " the " + pct(baseline) + " datum."
-    };
   });
+  // Radiant and Dire are one fact, not two. On a two sided split report only
+  // the favourable half; the other is its mirror and says nothing new.
+  if (rows.length === 2 && hits.length === 2) {
+    hits = hits.filter(function (r) { return r.sigma > 0; });
+  }
+  return hits
+    .sort(function (a, b) { return Math.abs(b.sigma) - Math.abs(a.sigma); })
+    .map(function (r) {
+      return { sigma: r.sigma, key: r.key,
+        text: (r.sigma > 0 ? "More likely to win " : "Less likely to win ") + say(r.key) +
+              ": " + pct(r.rate) + " from " + r.n + " games" };
+    });
 }
 
 
@@ -989,28 +1009,24 @@ function opacityFor(n, maxN) {
 /* ---------------- view: analysis blocks ---------------- */
 
 function CatBlock(props) {
-  var bl = props.block, baseline = props.baseline;
+  var bl = props.block;
   var rows = bl.shown;
   var eligible = rows.filter(function (r) { return r.eligible && bl.noFinding.indexOf(r.key) < 0; });
   var maxN = rows.reduce(function (a, r) { return Math.max(a, r.n); }, 0);
   var scale = Math.max(0.08, eligible.reduce(function (a, r) { return Math.max(a, Math.abs(r.delta)); }, 0));
-  var thinCount = rows.length - eligible.length;
 
   return section({ className: "block" },
     header(null,
       h3_(null, bl.name),
-      span({ className: "meta" },
-        rows.length + (rows.length === 1 ? " bucket, " : " buckets, ") + eligible.length + " above " + MIN_BUCKET + " games" +
-        (bl.hidden ? ", " + bl.hidden + " single game " + (bl.hidden === 1 ? "bucket" : "buckets") + " hidden" : ""))
+      span({ className: "meta" }, rows.length + " shown" + (bl.hidden ? ", " + bl.hidden + " single game hidden" : ""))
     ),
-    p_({ className: "desc" }, bl.desc),
     rows.length === 0
-      ? p_({ className: "desc" }, "No matches in the filtered sample carry this field.")
+      ? p_({ className: "meta", style: { margin: 0 } }, "No matches carry this field.")
       : div({ className: "scroller" },
           div({ className: "dev" },
             div({ className: "hd" },
-              div(null, "Bucket"), div({ className: "r" }, "n"), div({ className: "r" }, "Win rate"),
-              div(null, "Deviation, ±" + (scale*100).toFixed(1) + " pts full scale"), div({ className: "r" }, "Sigma")
+              div(null, "Bucket"), div({ className: "r" }, "Games"), div({ className: "r" }, "Win rate"),
+              div(null, "Against your " + pct(props.baseline) + " average")
             ),
             rows.map(function (r) {
               var thin = !r.eligible || bl.noFinding.indexOf(r.key) >= 0;
@@ -1018,66 +1034,38 @@ function CatBlock(props) {
                 div({ className: "lb", title: r.key }, r.key),
                 div({ className: "r num" }, r.n),
                 div({ className: "r num" }, pct(r.rate)),
-                e(Track, { delta: r.delta, scale: scale, thin: thin, opacity: opacityFor(r.n, maxN) }),
-                div({ className: "r num" }, thin ? "—" : sig(r.sigma))
+                e(Track, { delta: r.delta, scale: scale, thin: thin, opacity: opacityFor(r.n, maxN) })
               );
             })
           )
-        ),
-    div({ className: "foot" },
-      bl.findings.length
-        ? bl.findings.map(function (f, i) {
-            return p_({ key: i }, b_({ className: f.sigma > 0 ? "up" : "dn" }, sig(f.sigma) + " σ  "), f.text);
-          })
-        : p_({ className: "quiet" }, "Nothing in this split reaches " + SIGMA_CAT + " standard errors from the datum. There is no finding here. Treat the variation as noise."),
-      (thinCount > 0 || bl.hidden > 0)
-        ? p_({ className: "caveat" },
-            thinCount > 0
-              ? (thinCount + (thinCount === 1 ? " bucket is" : " buckets are") + " shown muted, being either under " + MIN_BUCKET +
-                 " games or a category that cannot support a finding. They are visible so you can see what was measured, not so you can act on them. ")
-              : "",
-            bl.hidden > 0
-              ? (bl.hidden + (bl.hidden === 1 ? " bucket holding" : " buckets holding") + " a single match " +
-                 (bl.hidden === 1 ? "is" : "are") + " left out of the table entirely, covering " + bl.hiddenGames +
-                 " of the " + props.total + " matches. A row reading 0% or 100% next to an n of one is noise wearing a number. They are all in the exported workbook.")
-              : "")
-        : null
-    )
+        )
   );
 }
 
 function MetricBlock(props) {
   var bl = props.block;
   var rows = bl.shown;
+  var dp = bl.dp || 0;
   var eligible = rows.filter(function (r) { return r.eligible; });
   var maxN = rows.reduce(function (a, r) { return Math.max(a, r.n); }, 0);
-  var dp = bl.dp || 0;
   var scale = Math.max(Math.abs(bl.datum || 0) * 0.10,
                        eligible.reduce(function (a, r) { return Math.max(a, Math.abs(r.delta)); }, 0));
-  var thinCount = rows.length - eligible.length;
-  var partial = bl.covered < bl.total;
 
   return section({ className: "block" },
     header(null,
       h3_(null, bl.name),
       span({ className: "meta" },
         bl.datum === null
-          ? "measured on " + bl.covered + " of " + bl.total + " matches"
-          : ("your overall " + bl.datum.toFixed(dp) + ", " + rows.length + " heroes, measured on " +
-             bl.covered + " of " + bl.total + " matches" +
-             (bl.hidden ? ", " + bl.hidden + " single game hidden" : "")))
+          ? "no data on " + bl.total + " matches"
+          : ("your average " + bl.datum.toFixed(dp) + (bl.hidden ? ", " + bl.hidden + " single game hidden" : "")))
     ),
-    p_({ className: "desc" }, bl.desc),
     rows.length === 0
-      ? p_({ className: "quiet", style: { fontSize: "12.8px", color: "var(--ink-2)", margin: 0 } },
-          bl.covered === 0
-            ? "Not one of the " + bl.total + " matches carries this field, so there is nothing to rank. OpenDota records it only on matches it has parsed, and none of yours in this window have been. Nothing is wrong with your account; this measurement simply was not taken."
-            : "Only " + bl.covered + " of " + bl.total + " matches carry this field, and no hero reaches the two game minimum to appear in the table.")
+      ? p_({ className: "meta", style: { margin: 0 } }, "No matches carry this field.")
       : div({ className: "scroller" },
           div({ className: "dev" },
             div({ className: "hd" },
-              div(null, "Hero"), div({ className: "r" }, "n"), div({ className: "r" }, "Mean"),
-              div(null, "Deviation, ±" + scale.toFixed(dp) + " full scale"), div({ className: "r" }, "Sigma")
+              div(null, "Hero"), div({ className: "r" }, "Games"), div({ className: "r" }, "Average"),
+              div(null, "Against your " + bl.datum.toFixed(dp))
             ),
             rows.map(function (r) {
               var thin = !r.eligible;
@@ -1085,29 +1073,11 @@ function MetricBlock(props) {
                 div({ className: "lb", title: r.key }, r.key),
                 div({ className: "r num" }, r.n),
                 div({ className: "r num" }, r.mean.toFixed(dp)),
-                e(Track, { delta: r.delta, scale: scale, thin: thin, opacity: opacityFor(r.n, maxN) }),
-                div({ className: "r num" }, thin ? "—" : sig(r.sigma))
+                e(Track, { delta: r.delta, scale: scale, thin: thin, opacity: opacityFor(r.n, maxN) })
               );
             })
           )
-        ),
-    div({ className: "foot" },
-      bl.findings.length
-        ? bl.findings.map(function (f, i) {
-            return p_({ key: i }, b_({ className: f.sigma > 0 ? "up" : "dn" }, sig(f.sigma) + " σ  "), f.text);
-          })
-        : p_({ className: "quiet" }, "No hero sits " + SIGMA_CAT + " standard errors from your overall " + bl.unit + ". Treat the ordering as noise."),
-      partial && bl.covered > 0
-        ? p_({ className: "caveat" }, "Measured on " + bl.covered + " of " + bl.total + " matches, or " +
-            Math.round(100 * bl.covered / bl.total) + "%. The rest do not carry this field and were left out rather than counted as zero.")
-        : null,
-      p_({ className: "caveat" }, bl.caveat),
-      (thinCount > 0 || bl.hidden > 0)
-        ? p_({ className: "caveat" },
-            thinCount > 0 ? (thinCount + " under " + MIN_BUCKET + " games, shown muted. ") : "",
-            bl.hidden > 0 ? (bl.hidden + " played once " + (bl.hidden === 1 ? "is" : "are") + " left out, covering " + bl.hiddenGames + " matches. All are in the workbook.") : "")
-        : null
-    )
+        )
   );
 }
 
@@ -1116,7 +1086,7 @@ function ItemGroup(props) {
   if (g.baseline === null) {
     return div({ className: "grp" },
       React.createElement("h4", null, g.hero),
-      p_({ className: "gm" }, g.games + " games, none carrying item data"));
+      p_({ className: "gm" }, g.games + " games, no item data"));
   }
   var eligible = g.shown.filter(function (r) { return r.eligible; });
   var maxN = g.shown.reduce(function (a, r) { return Math.max(a, r.n); }, 0);
@@ -1124,22 +1094,20 @@ function ItemGroup(props) {
 
   return div({ className: "grp" },
     React.createElement("h4", null, g.hero),
-    p_({ className: "gm" },
-      g.games + " games, " + g.measured + " with item data, hero win rate " + pct(g.baseline) +
-      (g.hidden ? ", " + g.hidden + " item" + (g.hidden === 1 ? "" : "s") + " seen once hidden" : "")),
+    p_({ className: "gm" }, g.measured + " games, wins " + pct(g.baseline) +
+      (g.hidden ? ", " + g.hidden + " seen once hidden" : "")),
     div({ className: "scroller" },
       div({ className: "dev" },
         div({ className: "hd" },
-          div(null, "Item"), div({ className: "r" }, "n"), div({ className: "r" }, "Win rate"),
-          div(null, "Deviation, ±" + (scale * 100).toFixed(1) + " pts"), div({ className: "r" }, "Sigma")),
+          div(null, "Item"), div({ className: "r" }, "Games"), div({ className: "r" }, "Win rate"),
+          div(null, "Against " + pct(g.baseline) + " on this hero")),
         g.shown.map(function (r) {
           var thin = !r.eligible;
           return div({ className: "row" + (thin ? " thin" : ""), key: r.id },
             div({ className: "lb", title: r.key }, r.key),
             div({ className: "r num" }, r.n),
             div({ className: "r num" }, pct(r.rate)),
-            e(Track, { delta: r.delta, scale: scale, thin: thin, opacity: opacityFor(r.n, maxN) }),
-            div({ className: "r num" }, thin ? "—" : sig(r.sigma)));
+            e(Track, { delta: r.delta, scale: scale, thin: thin, opacity: opacityFor(r.n, maxN) }));
         })
       )
     )
@@ -1155,12 +1123,10 @@ function ItemsBlock(props) {
       h3_(null, bl.name),
       span({ className: "meta" }, "item data on " + bl.covered + " of " + bl.total + " matches")
     ),
-    p_({ className: "desc" }, bl.desc),
-
     none
       ? div(null,
-          p_({ className: "quiet", style: { fontSize: "12.8px", color: "var(--ink-2)", margin: "0 0 12px" } },
-            "OpenDota's match list did not return item columns, so there is nothing to analyse yet. Items are only guaranteed on the single match endpoint, which means one request per match. Nothing is wrong: the tool simply will not make a hundred requests to a free API without being asked."),
+          p_({ className: "meta", style: { margin: "0 0 10px", maxWidth: "70ch" } },
+            "OpenDota's match list did not return items. They need one request per match, so the tool asks first."),
           props.onEnrich
             ? div({ className: "toolbar", style: { marginTop: 0 } },
                 button({ type: "button", onClick: props.onEnrich, disabled: props.enrich && props.enrich.running },
@@ -1172,17 +1138,7 @@ function ItemsBlock(props) {
                   : null,
                 props.enrich && props.enrich.note ? span({ className: "status" }, props.enrich.note) : null)
             : null)
-      : bl.groups.map(function (g) { return e(ItemGroup, { key: g.hero, group: g }); }),
-
-    div({ className: "foot" },
-      none ? null : (bl.findings.length
-        ? bl.findings.map(function (f, i) {
-            return p_({ key: i }, b_({ className: f.sigma > 0 ? "up" : "dn" }, sig(f.sigma) + " σ  "), f.text);
-          })
-        : p_({ className: "quiet" }, "No item on any of these heroes sits " + SIGMA_CAT + " standard errors from that hero's own win rate. Treat the ordering as noise.")),
-      p_({ className: "caveat" },
-        "Read this one with more suspicion than the rest. It is the inventory at the final whistle, so an expensive item is partly a consequence of the game going well rather than a cause of it: you finish a big item when you are ahead and never assemble it when you are behind. Cheap items bought early are less contaminated. Nothing here controls for what the enemy picked, and an item chosen because a game was already going a certain way will look like the reason it went that way.")
-    )
+      : bl.groups.map(function (g) { return e(ItemGroup, { key: g.hero, group: g }); })
   );
 }
 
@@ -1199,7 +1155,7 @@ function Readout(props) {
     cell("MATCHES", String(R.n)),
     cell("WINS", String(R.wins)),
     cell("LOSSES", String(R.n - R.wins)),
-    cell("BASELINE WIN RATE", pct(R.baseline, 2)),
+    cell("BASELINE WIN RATE", pct(R.baseline)),
     cell("PERIOD COVERED", R.periodFrom + "  to  " + R.periodTo, true)
   );
 }
@@ -1221,8 +1177,8 @@ function Headline(props) {
       ? p_({ style: { margin: 0, fontSize: "13px", color: "var(--ink-2)" } }, props.empty)
       : ul({ className: "fl" }, top.map(function (t, i) {
           return li({ key: i },
-            span({ className: "sg " + (t.f.sigma > 0 ? "up" : "dn") }, sig(t.f.sigma) + " σ"),
-            span(null, t.f.text, " ", span({ className: "src" }, "(" + t.from + ")"))
+            span({ className: "sg " + (t.f.sigma > 0 ? "up" : "dn") }, t.f.sigma > 0 ? "\u25B2" : "\u25BC"),
+            span(null, t.f.text)
           );
         }))
   );
@@ -1688,20 +1644,19 @@ function App() {
     p_({ className: "hint" },
       "An instrument, not a coach. It reads every match in a public OpenDota history inside the window you set, takes that player's own win rate as the datum, and reports which conditions sit far enough off that line to be worth believing."),
     dl(null,
-      dt(null, "The ID field"), dd(null, "Takes a 32 bit friend ID, a 17 bit Steam ID, a steamID3 like [U:1:195286385], a classic STEAM_0:1:97643192, a Steam, Dotabuff, OpenDota or Stratz profile URL, or simply a Dota 2 display name, which is looked up and offered as a list to choose from."),
-      dt(null, "Finding your Friend ID"), dd(null, IN_GAME + " It is also pure arithmetic from a Steam ID, being the 17 digit number minus 76561197960265728, so if you have one you already have the other. Looking an account up by display name goes through OpenDota's search endpoint, which is often down, and only contains accounts that have opted in to public match data in the first place."),
-      dt(null, "Datum"), dd(null, "The player's own win rate across every match that passed the filters. Not 50%, and not anybody else's."),
-      dt(null, "Coverage"), dd(null, "Every match OpenDota returns inside the window is used. Nothing is sampled, subsampled, averaged away or thrown out beyond the exclusions listed here, and the run record at the foot of each report states how many were dropped and why."),
-      dt(null, "Categorical splits"), dd(null, "Standard error on the proportion, the square root of p times one minus p divided by the bucket size, with p the datum. Sigma is how many of those standard errors the bucket sits from the line."),
-      dt(null, "Suppression"), dd(null, "Below " + SIGMA_CAT + " sigma, or below " + MIN_BUCKET + " games, no finding is written. The bucket still appears, muted, so you can see it was measured."),
-      dt(null, "Single game buckets"), dd(null, "A bucket holding one match is left out of the table entirely. It carries no information, and a row reading 0% or 100% next to an n of 1 invites exactly the misreading this tool exists to prevent. The block header says how many were hidden, and the exported workbook still contains every one of them."),
-      dt(null, "Items"), dd(null, "Measured only for the three most played heroes, and against that hero's own win rate rather than your overall one. The figure is the final inventory, which means an expensive item is partly a consequence of the game going well rather than a cause of it, and nothing here controls for what the enemy picked. Where OpenDota's match list omits item columns, the data has to be fetched one match at a time, which the tool does only when asked and at roughly fifty requests a minute."),
-      dt(null, "Continuous splits"), dd(null, "Hero damage per minute is a mean, not a proportion, so its standard error is the overall spread divided by the square root of the bucket size. The overall spread is used rather than each hero's own, for the same reason the win rate splits use your overall rate: a thin bucket must not be allowed to manufacture a tight interval for itself."),
-      dt(null, "What is deliberately not measured"), dd(null, "Comparing your statistics in wins against losses is left out on purpose. Winning games hand you towers, gold and a lower death count by construction, so those comparisons separate at eight or ten sigma and say only that wins looked like wins. They crowd out real findings without adding one."),
+      dt(null, "The ID field"), dd(null, "Takes a friend ID, a 17 digit Steam ID, a steamID3 like [U:1:195286385], a classic STEAM_0:1:97643192, a Steam, Dotabuff, OpenDota or Stratz profile URL, or a Dota 2 display name, which is looked up and offered as a list."),
+      dt(null, "Finding your Friend ID"), dd(null, IN_GAME + " It is also arithmetic from a Steam ID, the 17 digit number minus 76561197960265728, so if you have one you already have the other."),
+      dt(null, "Your average is the line"), dd(null, "Every bar is measured against your own win rate on the matches that passed your filters. Not 50%, and not anybody else's."),
+      dt(null, "What counts as a finding"), dd(null, "A bucket has to hold at least " + MIN_BUCKET + " games, and sit far enough from your average that chance is an unlikely explanation. The test is the usual one for a proportion, roughly one and a half standard errors. Buckets that fail it still appear in the tables, greyed, and simply produce no summary line."),
+      dt(null, "Single game buckets"), dd(null, "Left out of the tables entirely. A row reading 0% or 100% beside one game is noise wearing a number. They are all in the exported workbook."),
+      dt(null, "Coverage"), dd(null, "Every match OpenDota returns inside your window is used. Nothing is sampled or thrown out beyond the exclusions here, and the run record at the foot of each report says how many were dropped and why."),
       dt(null, "Abandons"), dd(null, "Any match under five minutes is discarded before anything is counted."),
-      dt(null, "Sessions"), dd(null, "Measured end of one match to start of the next. A gap over three hours opens a new session."),
-      dt(null, "Missing fields"), dd(null, "OpenDota fills lane role only on parsed matches, which are usually a small minority, and often returns a null party size. Blocks that depend on those fields state how many matches actually carried them. Nothing is inferred to fill a gap. Unmeasured is reported as unmeasured."),
-      dt(null, "Privacy"), dd(null, "Nothing is stored, and nothing leaves the browser except requests to OpenDota's public API. There is no login, because reading public match history does not need one.")
+      dt(null, "Sessions"), dd(null, "Measured from the end of one match to the start of the next. A gap over three hours opens a new session."),
+      dt(null, "Damage and trades"), dd(null, "Both are ranked per hero against your own average. They are set mostly by what a hero does rather than how well you played it, since a mid laner out damages a hard support by construction. They are most useful when a hero sits far from where its role would put it, or when two heroes you treat as the same job separate."),
+      dt(null, "Items"), dd(null, "Only for your three most played heroes, and measured against that hero's own win rate rather than your overall one. Read this block with more suspicion than the rest: it is the inventory at the final whistle, so an expensive item is partly a consequence of the game going well rather than a cause of it, and nothing here accounts for what the enemy picked."),
+      dt(null, "What is deliberately not measured"), dd(null, "Your statistics in wins against losses. Winning hands you towers, gold and a lower death count by construction, so those comparisons separate enormously and say only that wins looked like wins."),
+      dt(null, "Missing fields"), dd(null, "OpenDota fills lane role only on parsed matches, which are usually a small minority, and often returns a null party size. Nothing is inferred to fill a gap."),
+      dt(null, "Privacy"), dd(null, "Nothing is stored, and nothing leaves your browser except requests to OpenDota's public API. There is no login, because reading public match history does not need one.")
     ),
     p_({ className: "hint", style: { marginTop: "14px", marginBottom: 0 } },
       "One honest limit, and it is not about how much data is used, because all of it is. These matches were never assigned to conditions the way a controlled experiment assigns them. You chose when to play, which hero to pick and when to stop, so a bucket can move for reasons the bucket itself does not name. A split clearing " + SIGMA_CAT +
@@ -1718,7 +1673,7 @@ function App() {
     div({ className: "masthead" },
       React.createElement("h1", null, "Dota deviation report"),
       div({ className: "stamp" },
-        span(null, ANALYSES.length + " analyses / " + SIGMA_CAT.toFixed(1) + " σ floor / min " + MIN_BUCKET + " games"),
+        span(null, ANALYSES.length + " analyses, minimum " + MIN_BUCKET + " games per finding"),
         button({ className: "link", type: "button", onClick: function () { setInfo(!info); } },
           info ? "Hide method" : "Method and definitions"))
     ),
@@ -1732,15 +1687,14 @@ function App() {
           e(Headline, {
             title: "Strongest findings on win rate",
             blocks: R.blocks.filter(function (b) { return b.kind !== "metric"; }),
-            empty: "No win rate split clears " + SIGMA_CAT + " standard errors. That is a real result, not a failure of the tool. On " + R.n +
-                   " matches the noise floor is wide, and it means nothing you selected is distinguishable from your overall " + pct(R.baseline) +
-                   " win rate. Widen the window or gather more games before reading anything into the tables below."
+            empty: "Nothing stands out from your " + pct(R.baseline) + " average across " + R.n +
+                   " matches. That is a real answer, not a failure. Widen the window or play more games before reading anything into the tables."
           }),
           R.blocks.some(function (b) { return b.kind === "metric"; })
             ? e(Headline, {
                 title: "Strongest findings on contribution",
                 blocks: R.blocks.filter(function (b) { return b.kind === "metric"; }),
-                empty: "No hero sits " + SIGMA_CAT + " standard errors from your overall figure on any contribution metric."
+                empty: "No hero stands out from your usual damage or trades."
               })
             : null,
           R.blocks.map(function (bl) {

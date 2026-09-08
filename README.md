@@ -48,11 +48,7 @@ A bucket must clear 1.5 sigma and hold at least 8 games before a finding is
 written. Buckets below that threshold still appear in the table, muted, so it is
 visible what was measured without inviting anyone to act on it.
 
-For the wins against losses comparisons the two populations are compared with
-Welch's method, which assumes neither equal variance nor equal size. A finding
-needs 1.8 sigma.
-
-Thirteen analyses run at once, so some buckets will clear 1.5 sigma by chance
+Twelve analyses run at once, so some buckets will clear the bar by chance
 alone. The tool says so on its own front page. A finding is a hypothesis to test
 against the next hundred games, not a conclusion.
 
