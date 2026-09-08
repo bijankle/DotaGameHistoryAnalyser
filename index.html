@@ -933,6 +933,7 @@ function App() {
   }, []);
 
   var sm = React.useState(false), manual = sm[0], setManual = sm[1];
+  var sn = React.useState(""), nameQuery = sn[0], setNameQuery = sn[1];
   var sh = React.useState(""), heroesText = sh[0], setHeroesText = sh[1];
   var st2 = React.useState(""), matchesText = st2[0], setMatchesText = st2[1];
 
@@ -1176,13 +1177,26 @@ function App() {
       hr({ className: "divider" }),
       p_({ className: "n", style: { fontSize: "12px", fontWeight: 600, color: "var(--ink-2)", margin: "0 0 5px" } }, "If step 2 returns an empty pair of brackets"),
       p_({ className: "hint" },
-        "That is a real answer from OpenDota meaning no matches matched, not a broken request. Three things cause it, and these two URLs separate them. Open the first: if it returns matches, your history is public and you simply have not played inside the window you chose, so set Time window to All history. If it returns empty brackets too, open the second: either a profile carrying your name with no matches, or a Not Found error, means Expose Public Match Data is switched off in Dota 2 under Settings, Options, Advanced Options. OpenDota keeps no record at all for an account it has never been allowed to attribute a match to, so a private account and an unknown one look identical from outside. Check the account ID against the friend ID on your own Dota 2 profile before concluding the ID is wrong."),
+        "That is a real answer from OpenDota meaning nothing matched, not a broken request. Work through these three checks in order rather than guessing."),
+      p_({ className: "hint", style: { fontWeight: 500, color: "var(--ink)" } }, "Check 1. Is it just the time window?"),
       div({ className: "urlbox" },
         React.createElement("a", { href: API + "/players/" + pid.id + "/matches?limit=20", target: "_blank", rel: "noopener noreferrer" },
           API + "/players/" + pid.id + "/matches?limit=20")),
-      div({ className: "urlbox", style: { marginBottom: 0 } },
+      p_({ className: "hint" }, "No date filter, any twenty matches ever. Matches here means your history is fine and you simply have not played inside the window you chose, so set Time window to All history. Empty here rules the window out, go on."),
+      p_({ className: "hint", style: { fontWeight: 500, color: "var(--ink)" } }, "Check 2. Does OpenDota know this account at all?"),
+      div({ className: "urlbox" },
         React.createElement("a", { href: API + "/players/" + pid.id, target: "_blank", rel: "noopener noreferrer" },
-          API + "/players/" + pid.id))
+          API + "/players/" + pid.id)),
+      p_({ className: "hint" }, "A Not Found here means OpenDota holds no record for this account number. That has two causes which look identical from outside, a wrong account number or a Dota 2 account that has never opted in, so it does not on its own tell you which. Check 3 separates them."),
+      p_({ className: "hint", style: { fontWeight: 500, color: "var(--ink)" } }, "Check 3. Is the account number even right? Search by your Dota name."),
+      div({ className: "field", style: { marginBottom: "7px" } },
+        input({ type: "text", value: nameQuery, onChange: function (ev) { setNameQuery(ev.target.value); },
+                placeholder: "Your Dota 2 display name", autoComplete: "off", spellCheck: false, "aria-label": "Dota 2 display name" })),
+      nameQuery.trim() ? div({ className: "urlbox" },
+        React.createElement("a", { href: API + "/search?q=" + encodeURIComponent(nameQuery.trim()), target: "_blank", rel: "noopener noreferrer" },
+          API + "/search?q=" + encodeURIComponent(nameQuery.trim()))) : null,
+      p_({ className: "hint", style: { marginBottom: 0 } },
+        "This returns every public account OpenDota knows under that name, each with its account_id, personaname and last_match_time. Find yourself by the name and the most recent last_match_time, and that account_id is the number to put in the field at the top of this page. If it differs from what you entered, the account number was the fault, not your privacy setting. If your name returns nothing at all, OpenDota has never been allowed to attribute a match to you, and Expose Public Match Data inside Dota 2 under Settings, Options, Advanced Options is the thing to turn on. Note that this is a different setting from your Steam profile privacy, it lives inside the game, and it is off by default.")
     )
   ) : null;
 
