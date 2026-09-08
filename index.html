@@ -333,7 +333,7 @@ function parseAccountId(raw) {
 
 /* ---------------- network ---------------- */
 
-function ApiError(kind, message){ this.kind = kind; this.message = message; }
+function ApiError(kind, message, title){ this.kind = kind; this.message = message; this.title = title || null; }
 ApiError.prototype = Object.create(Error.prototype);
 
 function getJSON(url) {
@@ -953,7 +953,8 @@ function App() {
     if (err && err.kind === "network") setManual(true);   // paste path is the answer on a hosted page
     setProblem({
       kind: err && err.kind === "empty" ? "privacy" : "api",
-      title: err && err.kind === "empty" ? "No public matches on that account"
+      title: (err && err.title) ? err.title
+           : err && err.kind === "empty" ? "No public matches on that account"
            : err && err.kind === "thin" ? "Sample too small to analyse"
            : err && err.kind === "notfound" ? "Account not found"
            : err && err.kind === "rate" ? "Rate limited by OpenDota"
@@ -968,8 +969,10 @@ function App() {
     var returned = Array.isArray(rows) ? rows.length : 0;
 
     if (returned === 0) {
-      throw new ApiError("empty",
-        "OpenDota returned an empty list for account " + accId + ". Almost always this means Expose Public Match Data is switched off in your Dota 2 privacy settings. Open Dota 2, go to Settings, then Options, then Advanced Options, and turn on Expose Public Match Data. Matches played before you turned it on stay hidden, so play one game and give OpenDota a few minutes to pick it up. The other possibility is that the account ID is valid but belongs to somebody who has never played.");
+      throw new ApiError("empty", windowDef.days
+        ? "OpenDota returned an empty list for account " + accId + ", but that request only asked for the last " + windowDef.days + " days, so this does not yet mean anything is wrong. Rule the window out first: set Time window to All history and run again. If All history comes back full, you simply have not played inside the window you asked for. If it also comes back empty, the cause is your Dota 2 privacy setting."
+        : "OpenDota returned an empty list for account " + accId + " across all history, so the window is not the cause. This almost always means Expose Public Match Data is switched off in your Dota 2 privacy settings. Open Dota 2, go to Settings, then Options, then Advanced Options, and turn it on. Then play one match and wait for OpenDota to index it, which usually takes minutes but can take longer. Note that the profile endpoint returning Not Found is the same symptom, not a separate problem: OpenDota creates no record at all for an account whose matches it has never been allowed to attribute, so an unknown account and a private one look identical from outside. Confirm the account ID itself against the friend ID shown on your own Dota 2 profile before assuming it is wrong.",
+        (windowDef.days ? "Nothing in the last " + windowDef.days + " days" : "Nothing public on this account"));
     }
 
     var shaped = shape(rows, heroes, { days: windowDef.days, noTurbo: noTurbo, rankedOnly: rankedOnly });
@@ -1168,6 +1171,18 @@ function App() {
     div({ className: "toolbar" },
       button({ type: "button", onClick: runPasted, disabled: !matchesText.trim() }, "Run from pasted data"),
       button({ className: "ghost", type: "button", onClick: function () { setMatchesText(""); setHeroesText(""); } }, "Clear boxes")
+    ),
+    pid.error ? null : div(null,
+      hr({ className: "divider" }),
+      p_({ className: "n", style: { fontSize: "12px", fontWeight: 600, color: "var(--ink-2)", margin: "0 0 5px" } }, "If step 2 returns an empty pair of brackets"),
+      p_({ className: "hint" },
+        "That is a real answer from OpenDota meaning no matches matched, not a broken request. Three things cause it, and these two URLs separate them. Open the first: if it returns matches, your history is public and you simply have not played inside the window you chose, so set Time window to All history. If it returns empty brackets too, open the second: either a profile carrying your name with no matches, or a Not Found error, means Expose Public Match Data is switched off in Dota 2 under Settings, Options, Advanced Options. OpenDota keeps no record at all for an account it has never been allowed to attribute a match to, so a private account and an unknown one look identical from outside. Check the account ID against the friend ID on your own Dota 2 profile before concluding the ID is wrong."),
+      div({ className: "urlbox" },
+        React.createElement("a", { href: API + "/players/" + pid.id + "/matches?limit=20", target: "_blank", rel: "noopener noreferrer" },
+          API + "/players/" + pid.id + "/matches?limit=20")),
+      div({ className: "urlbox", style: { marginBottom: 0 } },
+        React.createElement("a", { href: API + "/players/" + pid.id, target: "_blank", rel: "noopener noreferrer" },
+          API + "/players/" + pid.id))
     )
   ) : null;
 
